@@ -2,6 +2,7 @@ import { getMinigame } from '../minigames/index.js';
 import { Minigame } from './Minigame.js';
 import { CHARACTERS } from '../characters/characters.js';
 import { shuffle } from '../engine/math.js';
+import { OnlineSession } from './Online.js';
 
 /**
  * Máquina de estados do jogo:
@@ -15,6 +16,7 @@ export class GameManager {
     this.prevMode = null;
     this.mg = null;
     this.t = 0;
+    this.online = null; // OnlineSession quando há uma sala aberta
   }
 
   _ctx() {
@@ -60,6 +62,7 @@ export class GameManager {
     });
     this.mg.start();
     this.refit();
+    this.rig.yaw = 0;
     this.rig.setOrbit({ radius: Math.max(24, this.rig.game.dist * 0.9), height: 14, speed: 0.05, lookY: -1.2, lambda: 1.2 });
     this.rig.viewShiftTarget = this._menuShift();
     this.mode = 'menu';
@@ -79,9 +82,21 @@ export class GameManager {
       { characterId: cfg.characterId, isHuman: true },
       ...others.slice(0, bots).map((c) => ({ characterId: c.id, isHuman: false, difficulty: cfg.difficulty })),
     ];
+    this._beginMatch(Cls, { players, points: cfg.points, time: cfg.time });
+  }
+
+  /** Partida online: `players` já vem na visão desta máquina (isHuman = você, isRemote = amigos). */
+  startOnline(players, cfg, role) {
+    this._clear();
+    this._beginMatch(getMinigame(this.state.lastConfig.minigameId), { players, points: cfg.points, time: cfg.time, net: { role } });
+  }
+
+  _beginMatch(Cls, setupCfg) {
+    this.overlay = false;
     this.mg = new Cls(this._ctx());
-    this.mg.setup({ players, points: cfg.points, time: cfg.time });
+    this.mg.setup(setupCfg);
     this.refit();
+    this.rig.yaw = this.mg.getViewYaw?.() || 0;
     this.ui.show(null);
     this.hud.build(this.mg.getHud());
     this.hud.show();
@@ -97,14 +112,30 @@ export class GameManager {
 
   pause() {
     if (this.mode !== 'playing' && this.mode !== 'countdown') return;
+    if (this.online) {
+      // online a partida não para: o menu só cobre a sua tela
+      if (this.overlay) return;
+      this.overlay = true;
+      this.ui.show('pause', { online: true, isHost: this.online.isHost });
+      this.input.captureGame = false;
+      return;
+    }
     this.prevMode = this.mode;
     this.mode = 'paused';
-    this.ui.show('pause');
+    // online a partida não para: o menu só cobre a sua tela
+    this.ui.show('pause', {});
     this.audio.duck(true);
     this.input.captureGame = false;
   }
 
   resume() {
+    if (this.overlay) {
+      this.overlay = false;
+      this.ui.show(null);
+      this.input.captureGame = true;
+      document.activeElement?.blur?.();
+      return;
+    }
     if (this.mode !== 'paused') return;
     this.mode = this.prevMode || 'playing';
     this.ui.show(null);
@@ -113,18 +144,33 @@ export class GameManager {
     document.activeElement?.blur?.();
   }
 
-  toMenu() {
+  toMenu(showMain = true) {
     this._startDemo();
-    this.ui.show('main');
+    if (showMain) this.ui.show('main');
     this.audio.duck(false);
+  }
+
+  /** Sai da sala online e volta ao menu. */
+  leaveOnline() {
+    this.online?.leave();
+    this.online = null;
+    this.toMenu();
+  }
+
+  /** Conexão caiu ou a sala fechou. */
+  onlineLost(message) {
+    this.online = null;
+    this.toMenu(false);
+    this.ui.show('online', { error: message });
   }
 
   _showResult() {
     this.mode = 'result';
+    this.overlay = false;
     this.rig.viewShiftTarget = this._menuShift();
     this.hud.hide();
     this.input.captureGame = false;
-    this.ui.show('result', { results: this.mg.getResults(), meta: this.mg.constructor.meta });
+    this.ui.show('result', { results: this.mg.getResults(), meta: this.mg.constructor.meta, online: !!this.online, isHost: this.online?.isHost });
   }
 
   onAction(action, data = {}) {
@@ -132,12 +178,45 @@ export class GameManager {
       case 'play': this.ui.show('setup'); break;
       case 'howto': this.ui.show('howto'); break;
       case 'settings': this.ui.show('settings'); break;
-      case 'back': this.ui.show('main'); break;
+      case 'back':
+        if (this.online) this.leaveOnline();
+        else this.ui.show('main');
+        break;
       case 'start': this.startMatch(this.state.lastConfig); break;
       case 'resume': this.resume(); break;
       case 'restart':
-      case 'again': this.startMatch(); break;
-      case 'menu': this.toMenu(); break;
+      case 'again':
+        if (this.online) this.online.startGame();
+        else this.startMatch();
+        break;
+      case 'menu':
+        if (this.online) this.leaveOnline();
+        else this.toMenu();
+        break;
+      // ---------- online ----------
+      case 'online':
+        this.ui.show('online');
+        break;
+      case 'net-host':
+        this.online?.leave();
+        this.online = new OnlineSession(this);
+        this.online.host();
+        break;
+      case 'net-join':
+        this.online?.leave();
+        this.online = new OnlineSession(this);
+        this.online.join(data.code);
+        break;
+      case 'net-char': this.online?.setCharacter(data.value); break;
+      case 'net-set': this.online?.setOption(data.key, data.type === 'num' ? Number(data.value) : data.value); break;
+      case 'net-start': this.online?.startGame(); break;
+      case 'net-lobby':
+        if (this.online?.isHost) {
+          this.online.showLobby();
+          this.online._broadcastLobby();
+        } else this.online?.showLobby();
+        break;
+      case 'net-leave': this.leaveOnline(); break;
       case 'setting': this.applySetting(data.key, data.value); break;
       default:
     }
@@ -168,20 +247,24 @@ export class GameManager {
   update(dt) {
     const inp = this.input;
     this.t += dt;
-    if ((this.mode === 'playing' || this.mode === 'countdown') && inp.pausePressed()) this.pause();
+    if (this.overlay && inp.pausePressed()) this.resume();
+    else if ((this.mode === 'playing' || this.mode === 'countdown') && inp.pausePressed()) this.pause();
     else if (this.mode === 'paused' && inp.pausePressed()) this.resume();
-    else if (this.mode === 'menu' && inp.pausePressed()) this.ui.back();
+    else if (this.mode === 'menu' && inp.pausePressed()) {
+      if (this.ui.current === 'online') this.onAction('back');
+      else if (!this.online) this.ui.back();
+    }
     else if (this.mode === 'result' && inp.pausePressed()) this.toMenu();
 
     // menus: setas / D-pad / analógico movem o foco; A confirma; B volta
-    if (this.ui.current && this.mode !== 'playing' && this.mode !== 'countdown') {
+    if (this.ui.current && (this.overlay || (this.mode !== 'playing' && this.mode !== 'countdown'))) {
       const nav = inp.navPressed();
       if (nav) this.ui.moveFocus(nav);
       if (inp.gpAcceptPressed()) {
         this.ui.activate();
         inp.consumeGamepad();
       } else if (inp.gpBackPressed()) {
-        if (this.mode === 'paused') this.resume();
+        if (this.mode === 'paused' || this.overlay) this.resume();
         else if (this.mode === 'result') this.toMenu();
         else this.ui.back();
         inp.consumeGamepad();
@@ -216,6 +299,7 @@ export class GameManager {
       if (this.mode === 'playing' && this.mg.isFinished()) this._showResult();
     }
     if (this.mode === 'menu' && this.mg?.isFinished()) this._startDemo();
+    this.online?.update(dt);
 
     this.rig.update(paused ? 0 : dt, this.mode === 'playing' ? this.mg.getCameraFocus() : null);
     const pdt = paused ? 0 : dt;

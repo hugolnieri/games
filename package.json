@@ -11,9 +11,11 @@
     "test:sim": "node test/sim.test.mjs"
   },
   "dependencies": {
+    "peerjs": "^1.5.5",
     "three": "^0.170.0"
   },
   "devDependencies": {
+    "peer": "^1.0.2",
     "vite": "^5.4.0",
     "vite-plugin-singlefile": "^2.0.2"
   }

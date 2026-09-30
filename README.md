@@ -31,6 +31,28 @@ Outros comandos:
 
 ---
 
+## Jogar online com amigos
+
+1. Os dois abrem o jogo (o mesmo `index.html` do `build:single` ou o mesmo site) e clicam em **JOGAR ONLINE**.
+2. Um clica em **CRIAR SALA** e recebe um código de 4 letras (ex.: `JQ9G`).
+3. O outro digita o código em **Entrar numa sala** e clica em **ENTRAR**.
+4. Na sala, cada um escolhe o personagem. O anfitrião define bots, pontos, tempo e dificuldade, e clica em **COMEÇAR**.
+
+Cabem até 4 pessoas por sala, e as vagas que sobram podem ser completadas com bots. Cada jogador vê a arena girada com o próprio gol embaixo.
+
+Como funciona: a conexão é direta entre os navegadores (WebRTC, via [PeerJS](https://peerjs.com)). O servidor público gratuito do PeerJS só serve para os dois se encontrarem. Quem cria a sala roda a partida e manda o estado ~30 vezes por segundo. O amigo manda só os comandos. Por isso vale deixar quem tem a melhor internet ou o melhor computador como anfitrião.
+
+Limitações:
+- Precisa de internet dos dois lados.
+- Algumas redes (4G de certas operadoras, redes corporativas) bloqueiam conexão direta. Se não conectar, tente outra rede.
+- No online a pausa não para o jogo: o menu só cobre a sua tela.
+- Se o anfitrião minimizar a aba, o navegador congela o jogo para todos.
+- Se um amigo sair no meio da partida, um bot assume o lugar dele.
+
+Para testar sem internet, suba um servidor de salas local com `npx peerjs --port 9000 --host 127.0.0.1` e abra o jogo com `?peer=127.0.0.1:9000` no endereço.
+
+---
+
 ## Controles
 
 | Ação                        | Teclado             | Controle (Xbox / PlayStation) | Toque         |
@@ -95,8 +117,10 @@ src/
       BoladaView.js        transforma eventos da simulação em 3D, partículas, som e textos
       BoladaMinigame.js    cola: passo fixo, input, bots, câmera lenta
     _modelo/             molde mínimo de minigame (não registrado) para copiar
+  net/Net.js           conexão ponto a ponto (PeerJS): criar sala, entrar, mensagens
+  game/Online.js       sala online: lobby, início da partida, envio de estado e comandos
   ui/
-    UI.js                telas em DOM (menu, setup, como jogar, configurações, pausa, resultado)
+    UI.js                telas em DOM (menu, setup, online, sala, como jogar, configurações, pausa, resultado)
     HUD.js               painéis, cronômetro, rótulos 3D, textos flutuantes, controles de toque
   styles/main.css        estilo "adesivo": contorno grosso + sombra dura
 test/sim.test.mjs      partidas headless com critérios de balanceamento

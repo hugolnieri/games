@@ -28,6 +28,7 @@ export class CameraRig {
     this.shakeScale = 1;
     this.punch = 0;
     this.t = 0;
+    this.yaw = 0; // gira a vista de jogo em torno do centro (online: cada um vê o próprio gol embaixo)
     this.viewShift = 0; // fração da largura: desloca a cena para a direita (menu à esquerda)
     this.viewShiftTarget = 0;
     this.pos.set(0, 30, 34);
@@ -123,6 +124,10 @@ export class CameraRig {
     if (this.mode === 'game') {
       this.dPos.copy(this.game.pos);
       this.dTarget.copy(this.game.target);
+      if (this.yaw) {
+        const c = Math.cos(this.yaw), s = Math.sin(this.yaw);
+        for (const v of [this.dPos, this.dTarget]) v.set(v.x * c + v.z * s, v.y, -v.x * s + v.z * c);
+      }
       if (focus) {
         this.dTarget.x += focus.x;
         this.dTarget.z += focus.z;

@@ -72,6 +72,8 @@ export class BoladaMinigame extends Minigame {
   setup(config) {
     this.config = config;
     this.demo = !!config.demo;
+    // online: 'host' roda a simulação e recebe comandos; 'client' só espelha o estado do host
+    this.role = config.net?.role || 'local';
     const seats = seatsFor(config.players.length);
     this.players = config.players.map((p, i) => ({ ...p, index: i, seat: seats[i], def: getCharacter(p.characterId) }));
     this.seed = Math.floor(Math.random() * 1e9);
@@ -81,9 +83,17 @@ export class BoladaMinigame extends Minigame {
       timeLimit: config.time,
       seed: this.seed,
     });
-    const rng = mulberry32(this.seed ^ 0x9e3779b9);
-    this.bots = this.players.filter((p) => !p.isHuman).map((p) => new BoladaBot(this.sim, p.seat, p.difficulty || 'normal', rng));
+    const rng = (this.botRng = mulberry32(this.seed ^ 0x9e3779b9));
+    const isBot = (p) => !p.isHuman && !p.isRemote;
+    this.bots = this.role === 'client' ? [] : this.players.filter(isBot).map((p) => new BoladaBot(this.sim, p.seat, p.difficulty || 'normal', rng));
     this.human = this.players.find((p) => p.isHuman) || null;
+    // um controlador por humano que esta máquina simula (o local e, no host, os remotos)
+    this.controllers = new Map();
+    if (this.role !== 'client') {
+      for (const p of this.players) {
+        if (p.isHuman || p.isRemote) this.controllers.set(p.index, { player: p, axis: { x: 0, y: 0 }, pulseBuf: 0, dashBuf: 0, seqP: 0, seqD: 0 });
+      }
+    }
     this.view = new BoladaView(this.ctx, this.sim, this.players, { demo: this.demo });
     this.acc = 0;
     this.running = false;
@@ -93,14 +103,24 @@ export class BoladaMinigame extends Minigame {
     this.ffwd = false;
     this.endTimer = -1;
     this.done = false;
-    this.pulseBuf = 0;
-    this.dashBuf = 0;
-    this.axis = { x: 0, y: 0 };
     this.inputs = [null, null, null, null];
+    this.netEvents = [];
+    this.snapAge = 0;
+    this.snapGap = 1 / 30;
+    this.localSeq = { p: 0, d: 0 };
+    this.localAxis = { x: 0, y: 0 };
   }
 
   start() {
     this.running = true;
+  }
+
+  /** Giro da câmera para o humano local ver o próprio gol embaixo (assento 0 = sem giro). */
+  getViewYaw() {
+    return this.human ? Math.PI / 2 - SEAT_ANGLES[this.human.seat] : 0;
+  }
+  getViewSeat() {
+    return this.human ? this.human.seat : 0;
   }
 
   hitstop(t) {
@@ -121,29 +141,37 @@ export class BoladaMinigame extends Minigame {
       scale = this.slowScale;
     }
 
-    if (this.human && this.running && !this.demo) {
+    if (this.human && !this.demo && this.running) {
       const input = this.ctx.input;
-      const inp = input.getPlayer(0);
-      if (inp.action) this.pulseBuf = INPUT_BUFFER;
-      if (inp.dash) this.dashBuf = INPUT_BUFFER;
-      this.axis = inp;
+      // com o menu aberto (pausa online) o jogo segue, mas seu pod fica parado
+      const inp = input.captureGame ? input.getPlayer(0) : { x: 0, y: 0, action: false, dash: false };
+      if (inp.action) this.localSeq.p++;
+      if (inp.dash) this.localSeq.d++;
+      this.localAxis = { x: inp.x, y: inp.y };
+      const ctrl = this.controllers.get(this.human.index);
+      if (ctrl) this._feed(ctrl, inp.x, inp.y, this.localSeq.p, this.localSeq.d);
       const alive = this.sim.pods[this.human.seat].active;
-      if (!alive && !this.sim.finished && input.confirmPressed()) this.ffwd = !this.ffwd;
+      if (this.role === 'local' && !alive && !this.sim.finished && input.confirmPressed()) this.ffwd = !this.ffwd;
     }
     if (this.ffwd && !this.sim.finished) scale *= 3;
 
-    if (this.running && !this.sim.finished) {
-      this.acc += dt * scale;
-      let steps = 0;
-      while (this.acc >= FIXED_STEP && steps < 30) {
-        this._fixed(FIXED_STEP);
-        this.acc -= FIXED_STEP;
-        steps++;
+    if (this.role === 'client') {
+      // espelho: só interpola entre os dois últimos estados recebidos do host
+      this.snapAge += dt;
+      this.view.update(dt, scale, Math.min(1, this.snapAge / this.snapGap));
+    } else {
+      if (this.running && !this.sim.finished) {
+        this.acc += dt * scale;
+        let steps = 0;
+        while (this.acc >= FIXED_STEP && steps < 30) {
+          this._fixed(FIXED_STEP);
+          this.acc -= FIXED_STEP;
+          steps++;
+        }
+        if (steps >= 30) this.acc = 0;
       }
-      if (steps >= 30) this.acc = 0;
+      this.view.update(dt, scale, this.sim.finished ? 1 : this.acc / FIXED_STEP);
     }
-
-    this.view.update(dt, scale, this.sim.finished ? 1 : this.acc / FIXED_STEP);
 
     if (this.sim.finished) {
       if (this.endTimer < 0) this.endTimer = 0;
@@ -152,29 +180,119 @@ export class BoladaMinigame extends Minigame {
     }
   }
 
+  /** Recebe um estado de controle (eixos + contadores de toques de pulso/dash). */
+  _feed(ctrl, x, y, seqP, seqD) {
+    ctrl.axis.x = x;
+    ctrl.axis.y = y;
+    if (seqP > ctrl.seqP) ctrl.pulseBuf = INPUT_BUFFER;
+    if (seqD > ctrl.seqD) ctrl.dashBuf = INPUT_BUFFER;
+    ctrl.seqP = seqP;
+    ctrl.seqD = seqD;
+  }
+
+  _controllerInput(ctrl, h) {
+    const pod = this.sim.pods[ctrl.player.seat];
+    // Direção de tela → movimento no trilho. A tela de cada humano é girada para o gol dele
+    // ficar embaixo; projeta "direita" e "cima" da tela (no mundo) na tangente do trilho.
+    const yaw = Math.PI / 2 - SEAT_ANGLES[ctrl.player.seat];
+    const c = Math.cos(yaw), sn = Math.sin(yaw);
+    const a = ctrl.axis;
+    let move = a.x * (c * pod.tx - sn * pod.tz) + a.y * (-sn * pod.tx - c * pod.tz);
+    if (Math.hypot(a.x, a.y) > 0.1 && Math.abs(move) < 0.25) move = 0;
+    move = clamp(move * 1.25, -1, 1);
+    const pulse = ctrl.pulseBuf > 0 && pod.pulseCd <= 0;
+    const dash = ctrl.dashBuf > 0 && pod.dashCd <= 0;
+    if (pulse) ctrl.pulseBuf = 0;
+    if (dash) ctrl.dashBuf = 0;
+    ctrl.pulseBuf = Math.max(0, ctrl.pulseBuf - h);
+    ctrl.dashBuf = Math.max(0, ctrl.dashBuf - h);
+    return { move, pulse, dash };
+  }
+
   _fixed(h) {
     const sim = this.sim;
     for (const bot of this.bots) this.inputs[bot.seat] = bot.update(h);
-    if (this.human) {
-      const pod = sim.pods[this.human.seat];
-      // Direção de tela → movimento no trilho: projeta o input na tangente do trilho.
-      // Tela para cima = -z no mundo. Serve para qualquer assento (multiplayer local).
-      const a = this.axis;
-      let move = a.x * pod.tx + -a.y * pod.tz;
-      if (Math.hypot(a.x, a.y) > 0.1 && Math.abs(move) < 0.25) move = 0;
-      move = clamp(move * 1.25, -1, 1);
-      const pulse = this.pulseBuf > 0 && pod.pulseCd <= 0;
-      const dash = this.dashBuf > 0 && pod.dashCd <= 0;
-      if (pulse) this.pulseBuf = 0;
-      if (dash) this.dashBuf = 0;
-      this.pulseBuf = Math.max(0, this.pulseBuf - h);
-      this.dashBuf = Math.max(0, this.dashBuf - h);
-      this.inputs[this.human.seat] = { move, pulse, dash };
-    }
+    for (const ctrl of this.controllers.values()) this.inputs[ctrl.player.seat] = this._controllerInput(ctrl, h);
     this.view.capturePrev();
     sim.step(h, this.inputs);
     const events = sim.drainEvents();
-    if (events.length) this.view.handleEvents(events, this);
+    if (events.length) {
+      this.view.handleEvents(events, this);
+      if (this.role === 'host') this.netEvents.push(...events);
+    }
+  }
+
+  // ---------- online ----------
+  /** Cliente: comando local para mandar ao host. */
+  netInput() {
+    return { x: +this.localAxis.x.toFixed(2), y: +this.localAxis.y.toFixed(2), p: this.localSeq.p, d: this.localSeq.d };
+  }
+
+  /** Host: comando de um jogador remoto (índice na lista de jogadores). */
+  setRemoteInput(index, m) {
+    const ctrl = this.controllers.get(index);
+    if (ctrl && ctrl.player.isRemote) this._feed(ctrl, +m.x || 0, +m.y || 0, m.p | 0, m.d | 0);
+  }
+
+  /** Host: jogador remoto saiu no meio da partida → vira bot. */
+  dropRemote(index) {
+    const ctrl = this.controllers.get(index);
+    if (!ctrl || !ctrl.player.isRemote) return;
+    this.controllers.delete(index);
+    this.bots.push(new BoladaBot(this.sim, ctrl.player.seat, 'normal', this.botRng));
+  }
+
+  /** Host: estado compacto + eventos desde o último envio. */
+  netSnapshot() {
+    const sim = this.sim;
+    const r = (v) => Math.round(v * 1000) / 1000;
+    const pods = [];
+    for (const p of sim.pods) {
+      if (!p) continue;
+      const st = p.stats;
+      pods.push([p.seat, r(p.off), r(p.v), p.active ? 1 : 0, p.points, p.place, r(p.eliminatedAt), r(p.pulseCd), r(p.pulseT), r(p.dashT), r(p.dashCd),
+        st.pulses, st.hits, st.supers, st.saves, st.conceded, st.scored]);
+    }
+    const balls = sim.balls.map((b) => [b.id, r(b.x), r(b.z), r(b.vx), r(b.vz), b.type === 'bomb' ? 1 : 0, b.lastHitBy, r(b.super), b.hitCount]);
+    const L = sim.launcher;
+    const snap = {
+      t: r(sim.time), tl: r(sim.timeLeft), sd: sim.suddenDeath ? 1 : 0, f: sim.finished ? 1 : 0, w: sim.winnerSeat,
+      l: [L.state === 'aiming' ? 1 : 0, r(L.t), r(L.aim), L.type === 'bomb' ? 1 : 0], p: pods, b: balls, e: this.netEvents,
+    };
+    this.netEvents = [];
+    return snap;
+  }
+
+  /** Cliente: aplica o estado recebido do host e toca os eventos na view. */
+  applySnapshot(s) {
+    const sim = this.sim;
+    this.view.capturePrev();
+    this.snapGap = Math.min(0.12, Math.max(1 / 60, this.snapAge || 1 / 30));
+    this.snapAge = 0;
+    sim.time = s.t;
+    sim.timeLeft = s.tl;
+    sim.suddenDeath = !!s.sd;
+    sim.finished = !!s.f;
+    sim.winnerSeat = s.w;
+    Object.assign(sim.launcher, { state: s.l[0] ? 'aiming' : 'cooldown', t: s.l[1], aim: s.l[2], type: s.l[3] ? 'bomb' : 'normal' });
+    for (const a of s.p) {
+      const pod = sim.pods[a[0]];
+      if (!pod) continue;
+      [, pod.off, pod.v] = a;
+      pod.active = !!a[3];
+      [pod.points, pod.place, pod.eliminatedAt, pod.pulseCd, pod.pulseT, pod.dashT, pod.dashCd] = a.slice(4, 11);
+      const st = pod.stats;
+      [st.pulses, st.hits, st.supers, st.saves, st.conceded, st.scored] = a.slice(11);
+      sim._podPos(pod);
+    }
+    sim.balls = s.b.map((a) => {
+      const bomb = a[5] === 1;
+      return {
+        id: a[0], x: a[1], z: a[2], vx: a[3], vz: a[4], type: bomb ? 'bomb' : 'normal', r: bomb ? C.ball.bombRadius : C.ball.radius,
+        value: bomb ? 2 : 1, lastHitBy: a[6], super: a[7], hitCount: a[8], alive: true, pulsedBy: {}, age: 0,
+      };
+    });
+    if (s.e && s.e.length) this.view.handleEvents(s.e, this);
   }
 
   isFinished() {
@@ -200,6 +318,8 @@ export class BoladaMinigame extends Minigame {
       players: this.players.map((p) => this._playerState(p)),
       humanOut: this.human ? !sim.pods[this.human.seat].active && !sim.finished : false,
       ffwd: this.ffwd,
+      online: this.role !== 'local',
+      viewSeat: this.getViewSeat(),
     };
   }
 

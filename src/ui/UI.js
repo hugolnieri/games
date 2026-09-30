@@ -29,7 +29,15 @@ export class UI {
       const b = e.target.closest('[data-action]');
       if (b && this.el.contains(b)) this._action(b);
     });
+    // Enter no campo do código da sala = ENTRAR
+    this.el.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && e.target.id === 'net-code') {
+        e.preventDefault();
+        this.el.querySelector('[data-action="net-join"]')?.click();
+      }
+    });
     this.el.addEventListener('input', (e) => {
+      if (e.target.id === 'net-code') e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
       const t = e.target;
       if (t.dataset.setting) this.onAction('setting', { key: t.dataset.setting, value: parseFloat(t.value) });
     });
@@ -65,8 +73,10 @@ export class UI {
       this.onAction('setting', { key: b.dataset.key, value });
       return;
     }
-    this.audio.play(a === 'back' || a === 'menu' ? 'uiBack' : 'ui');
-    this.onAction(a, { ...b.dataset });
+    this.audio.play(a === 'back' || a === 'menu' || a === 'net-leave' ? 'uiBack' : 'ui');
+    const data = { ...b.dataset };
+    if (a === 'net-join') data.code = this.el.querySelector('#net-code')?.value || '';
+    this.onAction(a, data);
   }
 
   _press(b) {
@@ -89,6 +99,7 @@ export class UI {
       (this.el.querySelector('[data-autofocus]') || items[0]).focus();
       return;
     }
+    if (cur.type === 'text' && (dir === 'left' || dir === 'right')) return; // setas movem o cursor no campo
     if (cur.type === 'range' && (dir === 'left' || dir === 'right')) {
       if (dir === 'left') cur.stepDown();
       else cur.stepUp();
@@ -139,7 +150,7 @@ export class UI {
   }
 
   back() {
-    if (['setup', 'howto', 'settings'].includes(this.current)) {
+    if (['setup', 'howto', 'settings', 'online'].includes(this.current)) {
       this.audio.play('uiBack');
       this.show('main');
     }
@@ -184,6 +195,7 @@ export class UI {
         <p class="badge">Minigame ${mg.number}: ${esc(mg.name)}</p>
         <nav class="menu-buttons" aria-label="Menu principal">
           <button class="btn btn--primary btn--xl" data-action="play" data-autofocus>JOGAR</button>
+          <button class="btn btn--online" data-action="online">JOGAR ONLINE</button>
           <button class="btn" data-action="howto">COMO JOGAR</button>
           <button class="btn" data-action="settings">CONFIGURAÇÕES</button>
         </nav>
@@ -304,7 +316,21 @@ export class UI {
     </section>`;
   }
 
-  _pause() {
+  _pause({ online = false, isHost = false } = {}) {
+    if (online) {
+      return `
+    <section class="screen screen--center screen--overlay">
+      <div class="panel panel--pause" role="dialog" aria-labelledby="pause-title">
+        <h2 id="pause-title">Menu</h2>
+        <p class="hint">A partida online continua rolando enquanto este menu está aberto.</p>
+        <div class="stack">
+          <button class="btn btn--primary" data-action="resume" data-autofocus>VOLTAR AO JOGO</button>
+          ${isHost ? '<button class="btn" data-action="restart">REINICIAR PARA TODOS</button>' : ''}
+          <button class="btn" data-action="net-leave">SAIR DA SALA</button>
+        </div>
+      </div>
+    </section>`;
+    }
     return `
     <section class="screen screen--center">
       <div class="panel panel--pause" role="dialog" aria-labelledby="pause-title">
@@ -318,7 +344,110 @@ export class UI {
     </section>`;
   }
 
-  _result({ results }) {
+  // ---------- online ----------
+  _online({ error = '', busy = '', code = '' } = {}) {
+    const chars = CHARACTERS.map(
+      (ch) => `
+      <button class="char char--sm" data-action="set" data-key="characterId" data-value="${ch.id}" aria-pressed="${this.state.lastConfig.characterId === ch.id}" style="--c:${hexToCss(ch.color)}">
+        <img src="${this.portraits[ch.id] || ''}" alt="" width="72" height="72">
+        <span class="char-name">${esc(ch.name)}</span>
+      </button>`,
+    ).join('');
+    return `
+    <section class="screen screen--panel">
+      <div class="panel panel--online" role="dialog" aria-labelledby="online-title">
+        <header class="panel-head">
+          <h2 id="online-title">Jogar online</h2>
+          <button class="btn btn--ghost" data-action="back">Voltar</button>
+        </header>
+        <p class="lead-sm">Um cria a sala e passa o código de 4 letras; o outro digita o código. Até 4 pessoas, e dá para completar com bots.</p>
+        ${error ? `<p class="net-msg net-msg--error" role="alert">${esc(error)}</p>` : ''}
+        ${busy ? `<p class="net-msg" role="status">${esc(busy)}</p>` : ''}
+        <div class="field">
+          <h3>Seu personagem</h3>
+          <div class="char-grid" data-group>${chars}</div>
+        </div>
+        <div class="net-cols">
+          <div class="net-box">
+            <h3>Criar sala</h3>
+            <p class="hint">Você é o anfitrião: escolhe as regras e começa a partida.</p>
+            <button class="btn btn--primary" data-action="net-host" ${busy ? 'disabled' : ''} data-autofocus>CRIAR SALA</button>
+          </div>
+          <div class="net-box">
+            <h3>Entrar numa sala</h3>
+            <label class="hint" for="net-code">Código que seu amigo passou</label>
+            <div class="net-join">
+              <input id="net-code" class="net-code" type="text" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="4" placeholder="ABCD" value="${esc(code)}">
+              <button class="btn" data-action="net-join" ${busy ? 'disabled' : ''}>ENTRAR</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>`;
+  }
+
+  _lobby(d) {
+    const members = d.members
+      .map((m, i) => {
+        const ch = getCharacter(m.characterId);
+        const tags = [i === 0 ? 'anfitrião' : '', i === d.you ? 'você' : ''].filter(Boolean).map((t) => `<em>${t}</em>`).join('');
+        return `<li class="member" style="--c:${hexToCss(ch.color)}"><img src="${this.portraits[ch.id] || ''}" alt="" width="48" height="48"><b>${esc(ch.name)}</b>${tags}</li>`;
+      })
+      .join('');
+    const empty = Math.max(0, d.maxPlayers - d.members.length);
+    const slots = Array.from({ length: empty }, (_, i) => `<li class="member member--empty">${i < d.settings.bots ? 'Bot' : 'Vaga livre'}</li>`).join('');
+    const mine = d.members[d.you]?.characterId;
+    const chars = CHARACTERS.map((ch) => {
+      const takenBy = d.members.findIndex((m) => m.characterId === ch.id);
+      const taken = takenBy >= 0 && takenBy !== d.you;
+      return `
+      <button class="char char--sm" data-action="net-char" data-value="${ch.id}" aria-pressed="${mine === ch.id}" ${taken ? 'disabled' : ''} style="--c:${hexToCss(ch.color)}">
+        <img src="${this.portraits[ch.id] || ''}" alt="" width="72" height="72">
+        <span class="char-name">${esc(ch.name)}</span>
+      </button>`;
+    }).join('');
+    const s = d.settings;
+    const opt = (key, value, label) =>
+      `<button class="opt" data-action="net-set" data-key="${key}" data-value="${value}" data-type="${typeof value === 'number' ? 'num' : 'str'}" aria-pressed="${String(s[key]) === String(value)}" ${d.isHost ? '' : 'disabled'}>${label}</button>`;
+    const maxBots = Math.max(0, d.maxPlayers - d.members.length);
+    const botOpts = Array.from({ length: maxBots + 1 }, (_, n) => opt('bots', n, n)).join('');
+    const canStart = d.members.length >= 2;
+    return `
+    <section class="screen screen--panel">
+      <div class="panel panel--lobby" role="dialog" aria-labelledby="lobby-title">
+        <header class="panel-head">
+          <h2 id="lobby-title">Sala <span class="room-code">${esc(d.code)}</span></h2>
+          <button class="btn btn--ghost" data-action="net-leave">Sair</button>
+        </header>
+        ${d.isHost ? `<p class="lead-sm">Passe o código <b>${esc(d.code)}</b> para seu amigo. Ele entra em <b>JOGAR ONLINE → Entrar numa sala</b>.</p>` : '<p class="lead-sm">Você está na sala! Esperando o anfitrião começar a partida.</p>'}
+        <div class="field">
+          <h3>Jogadores</h3>
+          <ul class="members">${members}${slots}</ul>
+        </div>
+        <div class="field">
+          <h3>Seu personagem</h3>
+          <div class="char-grid">${chars}</div>
+        </div>
+        <div class="field-grid">
+          <div class="field"><h3>Bots</h3><div class="seg">${botOpts}</div></div>
+          <div class="field"><h3>Pontos</h3><div class="seg">${[5, 10, 15].map((n) => opt('points', n, n)).join('')}</div></div>
+          <div class="field"><h3>Tempo</h3><div class="seg">${[[120, '2:00'], [180, '3:00'], [0, 'Sem limite']].map(([v, l]) => opt('time', v, l)).join('')}</div></div>
+        </div>
+        <div class="setup-bottom">
+          <div class="field">
+            <h3>Dificuldade dos bots</h3>
+            <div class="seg">${DIFFICULTY.map(([v, l]) => opt('difficulty', v, l)).join('')}</div>
+          </div>
+          <footer class="panel-foot">
+            ${d.isHost ? `<button class="btn btn--primary btn--xl" data-action="net-start" ${canStart ? 'data-autofocus' : 'disabled'}>COMEÇAR</button>` : '<p class="net-wait">Aguardando o anfitrião…</p>'}
+          </footer>
+        </div>
+        ${d.isHost && !canStart ? '<p class="hint">Esperando alguém entrar na sala…</p>' : ''}
+      </div>
+    </section>`;
+  }
+
+  _result({ results, online = false, isHost = false }) {
     const w = results[0];
     const wdef = getCharacter(w.characterId);
     const rows = results
@@ -347,8 +476,13 @@ export class UI {
         </div>
         <ol class="ranking">${rows}</ol>
         <div class="result-buttons">
-          <button class="btn btn--primary" data-action="again" data-autofocus>JOGAR NOVAMENTE</button>
-          <button class="btn" data-action="menu">MENU</button>
+          ${
+            online
+              ? isHost
+                ? '<button class="btn btn--primary" data-action="again" data-autofocus>REVANCHE</button><button class="btn" data-action="net-lobby">SALA</button><button class="btn" data-action="net-leave">SAIR</button>'
+                : '<p class="net-wait">O anfitrião decide a revanche…</p><button class="btn" data-action="net-leave" data-autofocus>SAIR DA SALA</button>'
+              : '<button class="btn btn--primary" data-action="again" data-autofocus>JOGAR NOVAMENTE</button><button class="btn" data-action="menu">MENU</button>'
+          }
         </div>
       </div>
     </section>`;

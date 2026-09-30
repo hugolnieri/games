@@ -106,6 +106,16 @@ test/sim.test.mjs
 - **Resultado:** `getResults()` devolve `summary: [{ label, value }]`, que vira as colunas da tela de resultado (a UI não conhece estatísticas de nenhum minigame).
 - **Visual das bolas:** `BALL_VIS` (BoladaView) desenha as bolas 12% maiores que o raio de colisão; rastro na cor de quem rebateu por último; anel de alcance do pulso só para humanos.
 
+## Online (PeerJS / WebRTC)
+
+- `net/Net.js` cria e entra em salas (id do peer = `treta-party-v1-<CÓDIGO>`, código de 4 caracteres) usando o servidor público do PeerJS e STUN do Google/Twilio (não há TURN). Com `?peer=host:porta` usa um PeerServer local (`npx peerjs --port 9000 --host 127.0.0.1`).
+- `game/Online.js` (OnlineSession) cuida da sala. O **host é autoritativo**: roda a sim, manda `{t:'s', s: mg.netSnapshot()}` a 30 Hz (estado compacto + eventos desde o último envio) e recebe `{t:'in', x, y, p, d}` dos clientes (eixos + contadores de toques).
+- O cliente roda o minigame com `net.role = 'client'`: não simula nada, só aplica `applySnapshot` (que chama `view.capturePrev()`, sobrescreve a sim e toca os eventos na view) e interpola.
+- Jogadores: `isHuman` = quem está nesta máquina ("você"); `isRemote` = humano em outra máquina; nenhum dos dois = bot. Se um cliente sair, `dropRemote()` põe um bot no lugar.
+- Cada máquina gira a câmera (`rig.yaw = mg.getViewYaw()`) para o próprio gol ficar embaixo. O input de tela é projetado com esse giro em `_controllerInput`, e o HUD põe os painéis por assento relativo (`viewSeat`).
+- Pausa online = sobreposição (`gm.overlay`): o jogo não para e o seu pod fica parado enquanto o menu está aberto.
+- Teste com dois navegadores (Playwright, dois contextos) + PeerServer local.
+
 ## Mecânica (resumo)
 
 - Movimento só lateral no trilho, com aceleração e frenagem rápidas.
@@ -172,7 +182,8 @@ test/sim.test.mjs
 
 - Jogar de verdade com teclado e controle em várias máquinas e revisar a sensação: velocidade do pod, janela da super (`superGap` 0.45 ≈ ±45ms a 10 u/s) e volume da trilha.
 - Desempenho em celulares fracos: hoje são ~460 draw calls, a maior parte vinda dos personagens (malhas + contornos). Mesclar as geometrias estáticas por material se for preciso.
-- Multiplayer local: `Input.getPlayer(slot)` já existe. Falta mapear um dispositivo por slot e permitir mais de um humano no setup (os assentos e a projeção tangencial do input já funcionam em qualquer lado).
+- Multiplayer local: `Input.getPlayer(slot)` já existe. Falta mapear um dispositivo por slot e permitir mais de um humano no setup (os controladores por humano de `BoladaMinigame` já suportam vários).
+- Online: adicionar um servidor TURN para redes que bloqueiam conexão direta; predição local do próprio pod no cliente se a latência incomodar.
 - Minigame 02 a partir de `src/minigames/_modelo/`.
 
 ## Pontos de atenção conhecidos

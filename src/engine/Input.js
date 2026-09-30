@@ -23,6 +23,11 @@ export class Input {
     this.stickEdge = null;
 
     window.addEventListener('keydown', (e) => {
+      if (e.target?.tagName === 'INPUT' && e.target.type === 'text') {
+        // digitando (código da sala): só setas verticais navegam; o resto é do campo
+        if (e.code === 'ArrowUp' || e.code === 'ArrowDown') this.pressed.add(e.code);
+        return;
+      }
       if (SCROLL_KEYS.has(e.code) || (this.captureGame && e.code === 'Space')) e.preventDefault();
       if (!e.repeat) this.pressed.add(e.code);
       this.down.add(e.code);

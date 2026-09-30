@@ -127,7 +127,8 @@ export class HUD {
         </div>
         <div class="pl-pts" aria-label="pontos">${p.points}</div>
         <div class="pl-out"></div>`;
-      this.corners[CORNER_BY_SEAT[p.seat]].appendChild(el);
+      // canto relativo a quem está vendo: o próprio gol fica embaixo à esquerda
+      this.corners[CORNER_BY_SEAT[(p.seat - (h.viewSeat || 0) + 4) % 4]].appendChild(el);
       this.panels.set(p.seat, {
         el, pts: el.querySelector('.pl-pts'), pips: [...el.querySelectorAll('.pl-pips i')], out: el.querySelector('.pl-out'), last: p.points, active: true,
       });
@@ -228,7 +229,9 @@ export class HUD {
     const pad = !!this.input.gp;
     const fast = pad ? 'Y ou △' : 'Enter';
     const hint = h.humanOut
-      ? this.touch && !pad
+      ? h.online
+        ? 'Você está fora. Assista ao final da partida.'
+        : this.touch && !pad
         ? 'Você está fora. Assista ao final ou pause.'
         : h.ffwd
           ? `Acelerando ×3. ${fast} volta ao normal.`

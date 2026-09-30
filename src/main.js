@@ -40,7 +40,6 @@ const hud = new HUD(uiEl, { camera: engine.camera, portraits, audio, input });
 // eslint-disable-next-line prefer-const
 let gm;
 engine.onResize.push((w, h, bufH) => {
-  rig.fit(w / h, h, hud.topReserve(w, h));
   particles.sparks.setViewport(bufH, rig.baseFov);
   particles.dust.setViewport(bufH, rig.baseFov);
   gm?.onResize();

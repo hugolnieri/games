@@ -430,7 +430,23 @@ ul {
   font-weight: 400;
   font-size: 20px;
 }
-.mg-card.is-on {
+button.mg-card {
+  font: inherit;
+  color: var(--ink);
+  text-align: left;
+  background: #fff;
+  box-shadow: 0 4px 0 var(--ink);
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  transition: transform 90ms ease, box-shadow 90ms ease, background-color 120ms ease;
+}
+button.mg-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 0 var(--ink);
+}
+.mg-card.is-on,
+.mg-card[aria-pressed='true'] {
   background: var(--sun);
   box-shadow: 0 5px 0 var(--ink);
 }
@@ -553,6 +569,9 @@ ul {
   grid-template-columns: minmax(200px, 280px) 1fr;
   gap: 26px;
   align-items: start;
+}
+.howto--text {
+  grid-template-columns: 1fr;
 }
 .diagram {
   width: 100%;
@@ -1475,7 +1494,8 @@ kbd {
   .mg-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .mg-card.is-on {
+  .mg-card.is-on,
+  button.mg-card {
     grid-column: 1 / -1;
   }
   .mg-card.is-soon {

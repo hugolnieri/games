@@ -149,6 +149,10 @@ export class HUD {
     this.lastSec = -1;
     this.keysT = 6;
     this.keysEl.hidden = this.touch;
+    const pad = !!this.input.gp;
+    this.keysEl.innerHTML = pad
+      ? '<span><kbd>Analógico</kbd> mover</span><span><kbd>A</kbd><kbd>✕</kbd> rebater</span><span><kbd>B</kbd><kbd>◯</kbd> dash</span>'
+      : '<span><kbd>A</kbd><kbd>D</kbd> mover</span><span><kbd>Espaço</kbd> rebater</span><span><kbd>Shift</kbd> dash</span>';
   }
 
   update(h, labels, dt) {
@@ -221,12 +225,14 @@ export class HUD {
     }
 
     // dica quando o humano já caiu
+    const pad = !!this.input.gp;
+    const fast = pad ? 'Y ou △' : 'Enter';
     const hint = h.humanOut
-      ? this.touch
+      ? this.touch && !pad
         ? 'Você está fora. Assista ao final ou pause.'
         : h.ffwd
-          ? 'Acelerando ×3. Enter volta ao normal.'
-          : 'Você está fora. Enter acelera ×3, Esc pausa.'
+          ? `Acelerando ×3. ${fast} volta ao normal.`
+          : `Você está fora. ${fast} acelera ×3, ${pad ? 'Start' : 'Esc'} pausa.`
       : '';
     if (hint !== this.lastHint) {
       this.hintEl.textContent = hint;

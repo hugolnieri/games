@@ -11,9 +11,13 @@ export class Minigame {
     number: '00',
     name: 'Minigame',
     tagline: '',
-    howTo: { objective: '', controls: [], rules: [], victory: '' },
+    // controls: [['teclas separadas por espaço', 'descrição']]; gamepad e diagram (SVG) são opcionais
+    howTo: { objective: '', controls: [], rules: [], victory: '', gamepad: '', diagram: '' },
     minPlayers: 2,
     maxPlayers: 4,
+    // Enquadramento da câmera de jogo (unidades de mundo): raio que precisa caber na tela
+    // (arena + paredes), raio usado em retrato e posição dos rótulos acima dos jogadores.
+    camera: { fitRadius: 11.2, fitRadiusPortrait: 10.5, labelRadius: 8.85, labelHeight: 2.6 },
   };
 
   constructor(ctx) {
@@ -42,7 +46,11 @@ export class Minigame {
   getCameraFocus() {
     return null;
   }
-  /** Lista ordenada por colocação. */
+  /**
+   * Lista ordenada por colocação:
+   * [{ place, name, color, characterId, isHuman, points, eliminatedAt, summary: [{ label, value }] }]
+   * `summary` vira as colunas de números da tela de resultado.
+   */
   getResults() {
     return [];
   }

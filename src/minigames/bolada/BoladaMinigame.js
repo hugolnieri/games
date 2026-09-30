@@ -2,7 +2,7 @@ import { Minigame } from '../../game/Minigame.js';
 import { BoladaSim } from './BoladaSim.js';
 import { BoladaBot } from './BoladaBot.js';
 import { BoladaView } from './BoladaView.js';
-import { FIXED_STEP } from './config.js';
+import { FIXED_STEP, SEAT_ANGLES, BOLADA as C } from './config.js';
 import { mulberry32, clamp } from '../../engine/math.js';
 import { getCharacter } from '../../characters/characters.js';
 
@@ -10,6 +10,27 @@ import { getCharacter } from '../../characters/characters.js';
 export const seatsFor = (n) => (n === 2 ? [0, 2] : n === 3 ? [0, 1, 3] : [0, 1, 2, 3]);
 
 const INPUT_BUFFER = 0.14; // aperto um pouco antes do cooldown acabar ainda conta
+
+/** Diagrama da tela "Como jogar": arena vista de cima (SVG: x = direita, y = +z = perto da câmera). */
+function howToDiagram() {
+  const arc = (a, color) => {
+    const p = (t) => `${(Math.cos(t) * 100).toFixed(1)} ${(Math.sin(t) * 100).toFixed(1)}`;
+    return `<path d="M ${p(a - C.goalHalfAngle)} A 100 100 0 0 1 ${p(a + C.goalHalfAngle)}" stroke="${color}" stroke-width="12" fill="none"/>`;
+  };
+  const colors = ['#ff6b3d', '#49d35e', '#2fb0ff', '#b46bff'];
+  return `
+    <svg class="diagram" viewBox="-120 -120 240 240" role="img" aria-label="Arena vista de cima: quatro gols, seu pod embaixo e o reator no centro">
+      <circle r="100" fill="#4b52c4" stroke="#1a1033" stroke-width="6"/>
+      ${SEAT_ANGLES.map((a, s) => arc(a, colors[s])).join('')}
+      <circle r="14" fill="#2b2f5e" stroke="#ffd23f" stroke-width="4"/>
+      <path d="M 18 -12 L 58 -40" stroke="#ffb347" stroke-width="6" stroke-linecap="round" stroke-dasharray="2 10"/>
+      <circle cx="62" cy="-44" r="7" fill="#fff4d6" stroke="#1a1033" stroke-width="3"/>
+      <circle cx="0" cy="86" r="24" fill="none" stroke="#ff6b3d" stroke-width="3" stroke-dasharray="4 5"/>
+      <circle cx="0" cy="86" r="11" fill="#ff6b3d" stroke="#1a1033" stroke-width="4"/>
+      <path d="M -30 80 l -12 6 l 12 6 z M 30 80 l 12 6 l -12 6 z" fill="#fff" stroke="#1a1033" stroke-width="3" stroke-linejoin="round"/>
+      <text x="0" y="56" text-anchor="middle" font-size="15" font-weight="800" fill="#fff" stroke="#1a1033" stroke-width="5" paint-order="stroke" stroke-linejoin="round">você</text>
+    </svg>`;
+}
 
 export class BoladaMinigame extends Minigame {
   static meta = {
@@ -19,6 +40,12 @@ export class BoladaMinigame extends Minigame {
     tagline: 'Defenda seu gol e mande as bolas para o gol dos outros.',
     minPlayers: 2,
     maxPlayers: 4,
+    camera: {
+      fitRadius: C.arenaRadius + 1.2, // arena + paredes
+      fitRadiusPortrait: C.arenaRadius + 0.5,
+      labelRadius: C.railRadius,
+      labelHeight: 2.6,
+    },
     howTo: {
       objective:
         'Cada jogador protege um gol na borda da arena. O reator do centro dispara bolas que ricocheteiam por tudo. Não deixe entrar no seu gol e rebata para o gol dos adversários.',
@@ -37,6 +64,8 @@ export class BoladaMinigame extends Minigame {
       ],
       victory:
         'Vence quem sobrar com pontos. Se o tempo acabar, quem tiver menos pontos sai; empate no topo vai para morte súbita.',
+      gamepad: 'No controle: analógico move, A ou ✕ rebate, B ou ◯ dá dash, Start pausa.',
+      diagram: howToDiagram(),
     },
   };
 
@@ -187,7 +216,15 @@ export class BoladaMinigame extends Minigame {
     return this.players
       .map((p) => {
         const pod = this.sim.pods[p.seat];
-        return { ...this._playerState(p), place: pod.place || 1, stats: { ...pod.stats }, eliminatedAt: pod.eliminatedAt, duration: this.sim.time };
+        const st = pod.stats;
+        return {
+          ...this._playerState(p), place: pod.place || 1, stats: { ...st }, eliminatedAt: pod.eliminatedAt, duration: this.sim.time,
+          summary: [
+            { label: 'rebatidas', value: st.hits + st.saves },
+            { label: 'supers', value: st.supers },
+            { label: 'boladas', value: st.scored },
+          ],
+        };
       })
       .sort((a, b) => a.place - b.place);
   }

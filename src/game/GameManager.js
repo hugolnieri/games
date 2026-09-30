@@ -1,4 +1,5 @@
-import { MINIGAMES, getMinigame } from '../minigames/index.js';
+import { getMinigame } from '../minigames/index.js';
+import { Minigame } from './Minigame.js';
 import { CHARACTERS } from '../characters/characters.js';
 import { shuffle } from '../engine/math.js';
 
@@ -37,19 +38,28 @@ export class GameManager {
     this.fx.clear();
   }
 
+  /** Aplica o enquadramento pedido pelo minigame atual e recalcula a câmera de jogo. */
+  refit() {
+    const cam = { ...Minigame.meta.camera, ...(this.mg?.constructor.meta.camera || {}) };
+    Object.assign(this.rig, cam);
+    const { width: w, height: h } = this.engine;
+    this.rig.fit(w / h, h, this.hud.topReserve(w, h));
+  }
+
   _menuShift() {
     return this.engine.camera.aspect > 1.25 ? 0.17 : 0;
   }
 
   _startDemo() {
     this._clear();
-    const Cls = MINIGAMES[0];
+    const Cls = getMinigame(this.state.lastConfig.minigameId);
     this.mg = new Cls(this._ctx());
     this.mg.setup({
       demo: true, points: 5, time: 0,
       players: shuffle(CHARACTERS).map((c, i) => ({ characterId: c.id, isHuman: false, difficulty: i % 2 ? 'hard' : 'normal' })),
     });
     this.mg.start();
+    this.refit();
     this.rig.setOrbit({ radius: Math.max(24, this.rig.game.dist * 0.9), height: 14, speed: 0.05, lookY: -1.2, lambda: 1.2 });
     this.rig.viewShiftTarget = this._menuShift();
     this.mode = 'menu';
@@ -62,13 +72,16 @@ export class GameManager {
     this.state.save();
     this._clear();
     const Cls = getMinigame(cfg.minigameId);
+    const { minPlayers, maxPlayers } = Cls.meta;
+    const bots = Math.min(Math.max(cfg.bots, minPlayers - 1), maxPlayers - 1, CHARACTERS.length - 1);
     const others = shuffle(CHARACTERS.filter((c) => c.id !== cfg.characterId));
     const players = [
       { characterId: cfg.characterId, isHuman: true },
-      ...others.slice(0, cfg.bots).map((c) => ({ characterId: c.id, isHuman: false, difficulty: cfg.difficulty })),
+      ...others.slice(0, bots).map((c) => ({ characterId: c.id, isHuman: false, difficulty: cfg.difficulty })),
     ];
     this.mg = new Cls(this._ctx());
     this.mg.setup({ players, points: cfg.points, time: cfg.time });
+    this.refit();
     this.ui.show(null);
     this.hud.build(this.mg.getHud());
     this.hud.show();
@@ -148,6 +161,7 @@ export class GameManager {
   }
 
   onResize() {
+    this.refit();
     if (this.mode === 'menu' || this.mode === 'result') this.rig.viewShiftTarget = this._menuShift();
   }
 
@@ -158,6 +172,21 @@ export class GameManager {
     else if (this.mode === 'paused' && inp.pausePressed()) this.resume();
     else if (this.mode === 'menu' && inp.pausePressed()) this.ui.back();
     else if (this.mode === 'result' && inp.pausePressed()) this.toMenu();
+
+    // menus: setas / D-pad / analógico movem o foco; A confirma; B volta
+    if (this.ui.current && this.mode !== 'playing' && this.mode !== 'countdown') {
+      const nav = inp.navPressed();
+      if (nav) this.ui.moveFocus(nav);
+      if (inp.gpAcceptPressed()) {
+        this.ui.activate();
+        inp.consumeGamepad();
+      } else if (inp.gpBackPressed()) {
+        if (this.mode === 'paused') this.resume();
+        else if (this.mode === 'result') this.toMenu();
+        else this.ui.back();
+        inp.consumeGamepad();
+      }
+    }
 
     if (this.mode === 'countdown') {
       this.cdT += dt;

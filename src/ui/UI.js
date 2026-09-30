@@ -1,6 +1,6 @@
 import { hexToCss } from '../engine/math.js';
 import { CHARACTERS, getCharacter } from '../characters/characters.js';
-import { MINIGAMES, COMING_SOON } from '../minigames/index.js';
+import { MINIGAMES, COMING_SOON, getMinigame } from '../minigames/index.js';
 
 const DIFFICULTY = [
   ['easy', 'Fácil', 'Persegue a bola sem prever o ricochete e se afoba no pulso.'],
@@ -42,6 +42,13 @@ export class UI {
       this.state.lastConfig[key] = type === 'num' ? Number(value) : value;
       this.state.save();
       this._press(b);
+      if (key === 'minigameId') {
+        // opções (ex.: número de oponentes) dependem do minigame: redesenha mantendo o foco
+        this.audio.play('ui');
+        this.show('setup');
+        this.el.querySelector(`[data-key="minigameId"][data-value="${value}"]`)?.focus({ preventScroll: true });
+        return;
+      }
       if (key === 'difficulty') {
         const d = DIFFICULTY.find((x) => x[0] === value);
         const hint = this.el.querySelector('#diff-hint');
@@ -66,6 +73,69 @@ export class UI {
     const group = b.closest('[data-group]');
     if (!group) return;
     group.querySelectorAll('[aria-pressed]').forEach((x) => x.setAttribute('aria-pressed', x === b ? 'true' : 'false'));
+  }
+
+  // ---------- navegação por setas / controle ----------
+  _focusables() {
+    return [...this.el.querySelectorAll('button:not([disabled]), input:not([disabled])')].filter((e) => e.offsetParent !== null);
+  }
+
+  /** Move o foco para o elemento mais próximo na direção pedida (navegação espacial simples). */
+  moveFocus(dir) {
+    const items = this._focusables();
+    if (!items.length) return;
+    const cur = document.activeElement;
+    if (!cur || !this.el.contains(cur)) {
+      (this.el.querySelector('[data-autofocus]') || items[0]).focus();
+      return;
+    }
+    if (cur.type === 'range' && (dir === 'left' || dir === 'right')) {
+      if (dir === 'left') cur.stepDown();
+      else cur.stepUp();
+      cur.dispatchEvent(new Event('input', { bubbles: true }));
+      return;
+    }
+    const r0 = cur.getBoundingClientRect();
+    const cx = r0.left + r0.width / 2, cy = r0.top + r0.height / 2;
+    const vertical = dir === 'up' || dir === 'down';
+    let aligned = null, alignedMain = Infinity, near = null, nearScore = Infinity, nearMain = Infinity, nearSide = 0;
+    for (const el of items) {
+      if (el === cur) continue;
+      const r = el.getBoundingClientRect();
+      const dx = r.left + r.width / 2 - cx, dy = r.top + r.height / 2 - cy;
+      const main = dir === 'up' ? -dy : dir === 'down' ? dy : dir === 'left' ? -dx : dx;
+      const side = vertical ? Math.abs(dx) : Math.abs(dy);
+      if (main <= 4) continue;
+      // alinhado = mesma linha (esq./dir.) ou mesma coluna (cima/baixo)
+      const overlap = vertical ? r.right > r0.left && r.left < r0.right : r.bottom > r0.top && r.top < r0.bottom;
+      if (overlap && main < alignedMain) {
+        alignedMain = main;
+        aligned = el;
+      }
+      if (main < side * 0.15) continue; // quase perpendicular: não conta como "nessa direção"
+      const score = main + side * 1.2;
+      if (score < nearScore) {
+        nearScore = score;
+        near = el;
+        nearMain = main;
+        nearSide = side;
+      }
+    }
+    // prefere o alinhado; só troca por outro se ele estiver bem "reto" na direção e muito mais perto
+    const nearIsStraight = near && nearMain >= nearSide * 1.5;
+    const best = aligned && !(nearIsStraight && nearMain * 2.5 < alignedMain) ? aligned : near;
+    if (best) {
+      best.focus();
+      best.scrollIntoView?.({ block: 'nearest' });
+      this.audio.play('tick');
+    }
+  }
+
+  /** "Aperta" o elemento focado (botão A do controle). */
+  activate() {
+    const cur = document.activeElement;
+    if (cur && this.el.contains(cur) && cur.tagName === 'BUTTON') cur.click();
+    else this.moveFocus('down');
   }
 
   back() {
@@ -99,9 +169,14 @@ export class UI {
     return `<button class="opt" data-action="setting" data-key="${key}" data-value="${value}" aria-pressed="${String(current) === String(value)}">${label}</button>`;
   }
 
+  /** Minigame escolhido na última configuração (menu, "Como jogar" e setup seguem ele). */
+  _selected() {
+    return getMinigame(this.state.lastConfig.minigameId);
+  }
+
   // ---------- telas ----------
   _main() {
-    const mg = MINIGAMES[0].meta;
+    const mg = this._selected().meta;
     return `
     <section class="screen screen--main">
       <div class="menu-col">
@@ -120,8 +195,13 @@ export class UI {
   _setup() {
     const c = this.state.lastConfig;
     const diff = DIFFICULTY.find((d) => d[0] === c.difficulty) || DIFFICULTY[1];
+    const sel = this._selected().meta;
+    const selectedId = sel.id;
+    const botOpts = [];
+    for (let n = Math.max(1, sel.minPlayers - 1); n <= Math.min(CHARACTERS.length, sel.maxPlayers) - 1; n++) botOpts.push(n);
+    const bots = Math.min(Math.max(c.bots, botOpts[0]), botOpts[botOpts.length - 1]);
     const mgCards = MINIGAMES.map(
-      (M) => `<div class="mg-card is-on"><span class="mg-num">${M.meta.number}</span><b>${esc(M.meta.name)}</b><span>${esc(M.meta.tagline)}</span></div>`,
+      (M) => `<button class="mg-card" data-action="set" data-key="minigameId" data-value="${M.meta.id}" aria-pressed="${M.meta.id === selectedId}"><span class="mg-num">${M.meta.number}</span><b>${esc(M.meta.name)}</b><span>${esc(M.meta.tagline)}</span></button>`,
     ).join('');
     const soon = Array.from({ length: COMING_SOON }, (_, i) => `<div class="mg-card is-soon" aria-hidden="true"><span class="mg-num">0${MINIGAMES.length + i + 1}</span><b>Em breve</b></div>`).join('');
     const chars = CHARACTERS.map(
@@ -141,7 +221,7 @@ export class UI {
         </header>
         <div class="field">
           <h3>Minigame</h3>
-          <div class="mg-row">${mgCards}${soon}</div>
+          <div class="mg-row" data-group>${mgCards}${soon}</div>
         </div>
         <div class="field">
           <h3>Seu personagem</h3>
@@ -150,7 +230,7 @@ export class UI {
         <div class="field-grid">
           <div class="field">
             <h3>Oponentes</h3>
-            <div class="seg" data-group>${[1, 2, 3].map((n) => this._opt('bots', n, n, c.bots, 'num')).join('')}</div>
+            <div class="seg" data-group>${botOpts.map((n) => this._opt('bots', n, n, bots, 'num')).join('')}</div>
           </div>
           <div class="field">
             <h3>Pontos para começar</h3>
@@ -176,35 +256,23 @@ export class UI {
   }
 
   _howto() {
-    const h = MINIGAMES[0].meta.howTo;
+    const meta = this._selected().meta;
+    const h = meta.howTo;
     const keys = h.controls.map(([k, d]) => `<li>${k.split(' ').map((x) => `<kbd>${esc(x)}</kbd>`).join(' ')} <span>${esc(d)}</span></li>`).join('');
     return `
     <section class="screen screen--panel">
       <div class="panel panel--howto" role="dialog" aria-labelledby="howto-title">
         <header class="panel-head">
-          <h2 id="howto-title">Como jogar: ${esc(MINIGAMES[0].meta.name)}</h2>
+          <h2 id="howto-title">Como jogar: ${esc(meta.name)}</h2>
           <button class="btn btn--ghost" data-action="back" data-autofocus>Voltar</button>
         </header>
-        <div class="howto">
-          <svg class="diagram" viewBox="-120 -120 240 240" role="img" aria-label="Arena vista de cima: quatro gols, seu pod embaixo e o reator no centro">
-            <circle r="100" fill="#4b52c4" stroke="#1a1033" stroke-width="6"/>
-            <path d="M ${Math.cos(1.01) * 100} ${Math.sin(1.01) * 100} A 100 100 0 0 1 ${Math.cos(2.13) * 100} ${Math.sin(2.13) * 100}" stroke="#ff6b3d" stroke-width="12" fill="none"/>
-            <path d="M ${Math.cos(-0.56) * 100} ${Math.sin(-0.56) * 100} A 100 100 0 0 1 ${Math.cos(0.56) * 100} ${Math.sin(0.56) * 100}" stroke="#49d35e" stroke-width="12" fill="none"/>
-            <path d="M ${Math.cos(-2.13) * 100} ${Math.sin(-2.13) * 100} A 100 100 0 0 1 ${Math.cos(-1.01) * 100} ${Math.sin(-1.01) * 100}" stroke="#2fb0ff" stroke-width="12" fill="none"/>
-            <path d="M ${Math.cos(2.58) * 100} ${Math.sin(2.58) * 100} A 100 100 0 0 1 ${Math.cos(3.7) * 100} ${Math.sin(3.7) * 100}" stroke="#b46bff" stroke-width="12" fill="none"/>
-            <circle r="14" fill="#2b2f5e" stroke="#ffd23f" stroke-width="4"/>
-            <path d="M 18 -12 L 58 -40" stroke="#ffb347" stroke-width="6" stroke-linecap="round" stroke-dasharray="2 10"/>
-            <circle cx="62" cy="-44" r="7" fill="#fff4d6" stroke="#1a1033" stroke-width="3"/>
-            <circle cx="0" cy="86" r="24" fill="none" stroke="#ff6b3d" stroke-width="3" stroke-dasharray="4 5"/>
-            <circle cx="0" cy="86" r="11" fill="#ff6b3d" stroke="#1a1033" stroke-width="4"/>
-            <path d="M -30 80 l -12 6 l 12 6 z M 30 80 l 12 6 l -12 6 z" fill="#fff" stroke="#1a1033" stroke-width="3" stroke-linejoin="round"/>
-            <text x="0" y="56" text-anchor="middle" font-size="15" font-weight="800" fill="#fff" stroke="#1a1033" stroke-width="5" paint-order="stroke" stroke-linejoin="round">você</text>
-          </svg>
+        <div class="howto${h.diagram ? '' : ' howto--text'}">
+          ${h.diagram || ''}
           <div class="howto-text">
             <p class="lead">${esc(h.objective)}</p>
             <h3>Controles</h3>
             <ul class="keys">${keys}</ul>
-            <p class="small">No controle: analógico move, A ou ✕ rebate, B ou ◯ dá dash, Start pausa.</p>
+            ${h.gamepad ? `<p class="small">${esc(h.gamepad)}</p>` : ''}
             <h3>Regras</h3>
             <ul class="rules">${h.rules.map((r) => `<li>${esc(r)}</li>`).join('')}</ul>
             <h3>Vitória</h3>
@@ -256,17 +324,12 @@ export class UI {
     const rows = results
       .map((r) => {
         const detail = r.place === 1 ? `Venceu com ${r.points} ${r.points === 1 ? 'ponto' : 'pontos'}` : r.eliminatedAt >= 0 ? `Fora aos ${fmtTime(r.eliminatedAt)}` : `${r.points} pontos`;
-        const hits = r.stats.hits + r.stats.saves;
         return `
         <li class="rank" style="--c:${hexToCss(r.color)}">
           <span class="rank-place">${r.place}º</span>
           <img src="${this.portraits[r.characterId] || ''}" alt="" width="48" height="48">
           <div class="rank-who"><b>${esc(r.name)}${r.isHuman ? ' <em>você</em>' : ''}</b><span>${detail}</span></div>
-          <div class="rank-stats">
-            <span><b>${hits}</b> rebatidas</span>
-            <span><b>${r.stats.supers}</b> supers</span>
-            <span><b>${r.stats.scored}</b> boladas</span>
-          </div>
+          <div class="rank-stats">${(r.summary || []).map((x) => `<span><b>${esc(x.value)}</b> ${esc(x.label)}</span>`).join('')}</div>
         </li>`;
       })
       .join('');

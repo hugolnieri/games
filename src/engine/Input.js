@@ -19,6 +19,8 @@ export class Input {
     this.gp = null;
     this.gpPrev = [];
     this.gpPressed = new Set();
+    this.stickDir = null; // direção atual do analógico (para navegar em menus por "bordas")
+    this.stickEdge = null;
 
     window.addEventListener('keydown', (e) => {
       if (SCROLL_KEYS.has(e.code) || (this.captureGame && e.code === 'Space')) e.preventDefault();
@@ -39,12 +41,41 @@ export class Input {
       }
     }
     this.gpPressed.clear();
+    this.stickEdge = null;
     if (this.gp) {
       this.gp.buttons.forEach((b, i) => {
         if (b.pressed && !this.gpPrev[i]) this.gpPressed.add(i);
         this.gpPrev[i] = b.pressed;
       });
+      const ax = this.gp.axes[0] || 0, ay = this.gp.axes[1] || 0;
+      let dir = null;
+      if (Math.max(Math.abs(ax), Math.abs(ay)) > 0.6) dir = Math.abs(ax) > Math.abs(ay) ? (ax > 0 ? 'right' : 'left') : ay > 0 ? 'down' : 'up';
+      else if (Math.max(Math.abs(ax), Math.abs(ay)) > 0.35) dir = this.stickDir; // histerese
+      if (dir && dir !== this.stickDir) this.stickEdge = dir;
+      this.stickDir = dir;
     }
+  }
+
+  /** Navegação em menus: setas do teclado, D-pad ou analógico (uma vez por toque). */
+  navPressed() {
+    if (this.wasPressed('ArrowUp') || this.gpPressed.has(12)) return 'up';
+    if (this.wasPressed('ArrowDown') || this.gpPressed.has(13)) return 'down';
+    if (this.wasPressed('ArrowLeft') || this.gpPressed.has(14)) return 'left';
+    if (this.wasPressed('ArrowRight') || this.gpPressed.has(15)) return 'right';
+    return this.stickEdge;
+  }
+  /** A / ✕ no controle (nos menus o teclado usa Enter/Espaço nativos do botão focado). */
+  gpAcceptPressed() {
+    return this.gpPressed.has(0);
+  }
+  /** B / ◯ no controle. */
+  gpBackPressed() {
+    return this.gpPressed.has(1);
+  }
+  /** Descarta os toques do controle neste quadro (ex.: o A que fechou um menu não vira pulso). */
+  consumeGamepad() {
+    this.gpPressed.clear();
+    this.stickEdge = null;
   }
 
   isDown(...codes) {

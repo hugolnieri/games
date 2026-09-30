@@ -14,29 +14,35 @@ npm install
 npm run dev            # desenvolvimento
 npm run test:sim       # partidas headless só de bots (valida física, regras, balanceamento)
 npm run build          # build normal (dist/)
-npm run build:single   # HTML único com tudo inline (dist-single/) — requer vite.config.js, ver pendências
+npm run build:single   # HTML único com tudo inline (dist-single/), abre direto do disco (file://)
 ```
 
 ## Status
 
-**Pronto e testado (headless):** simulação + bots. `npm run test:sim` passa os 6 critérios:
-- Difícil vence 30/30 contra três Fáceis.
-- Difícil vence ~2/3 no 1v1 contra Normal; Normal vence 30/30 no 1v1 contra Fácil.
+**Tudo roda no navegador** (Chromium testado em 1280x720, 390x844 retrato com toque e 844x390 paisagem com toque), sem erros de console. O fluxo completo funciona: menu com demo ao vivo → setup → contagem → partida → pausa (Esc/Start/aba oculta) → resultado → jogar novamente / menu. O `build:single` também abre e roda via `file://`.
+
+`npm run test:sim` passa os 6 critérios (N=80):
+- Difícil vence 78/80 contra três Fáceis.
+- No 1v1, Difícil vence ~74% contra Normal, e Normal vence 80/80 contra Fácil.
 - Jogador parado nunca vence.
-- Partida de 4 com 10 pontos dura ~95s.
+- Partida de 4 com 10 pontos dura ~78s.
 
-**Escrito, mas NUNCA rodado no navegador:** engine, personagens, arena, view, minigame, GameManager, UI, HUD. Espere bugs de integração, erros de digitação e iluminação/cores precisando de ajuste.
-
-**Falta escrever:** `src/main.js`, `src/styles/main.css`, `index.html`, `vite.config.js`, `README.md` (specs abaixo).
+**Tuning feito no navegador** (ver histórico do git):
+- Lançador com `minGap` 0.8 e `startBalls` 3: no início há ~2.4 bolas em quadra (antes eram ~1.8).
+- Fácil ligeiramente menos atrapalhado.
+- Correção no Difícil: em empate de pontos, todos miravam no assento 0 (o do humano). Agora o bot sorteia o alvo e o mantém.
 
 ## Arquitetura
 
 ```
+index.html, vite.config.js   (modo `single` = vite-plugin-singlefile → dist-single/)
 src/
+  main.js            wiring (ver abaixo) + window.__treta = { gm, engine } para testes
+  styles/main.css    estilo "adesivo", HUD, toque, responsivo, movimento reduzido
   engine/            reutilizável por qualquer minigame
     Engine.js          renderer (NoToneMapping, sRGB), cena, câmera, loop, onResize(w, h, bufferHeight)
-    CameraRig.js       modos 'game' (fit automático da arena a qualquer aspecto) e 'orbit'; trauma shake, punch de FOV, viewShift
-    Input.js           teclado + gamepad (layout W3C, Xbox/PS) + toque → getPlayer(slot) = { x, y, action, dash }
+    CameraRig.js       modos 'game' (fit(aspect, pxH, reservePx): arena inteira na tela e rótulos fora da faixa do cronômetro) e 'orbit'; trauma shake, punch de FOV, viewShift
+    Input.js           teclado + gamepad (layout W3C, Xbox/PS) + toque → getPlayer(slot) = { x, y, action, dash }; navPressed()/gpAcceptPressed()/gpBackPressed() para menus
     Audio.js           WebAudio procedural: play(nome, opts), trilha em loop com scheduler, duck(), unlock()
     Particles.js       Points + ShaderMaterial, pool; emit({...}); cores sRGB cruas (hexToRgb)
     Effects.js         anéis de onda de choque
@@ -44,13 +50,13 @@ src/
     toon.js            toon(color), withOutline(mesh) (casco invertido), blobShadow(), disposeTree()
     math.js            clamp, lerp, damp, wrapAngle, mulberry32, rayCircleExit, hexToCss...
   game/
-    Minigame.js        CONTRATO de todo minigame (setup/start/update/isFinished/getHud/getLabels/getCameraFocus/getResults/dispose + static meta)
-    GameManager.js     máquina de estados: menu (demo ao vivo no fundo) → countdown → playing ⇄ paused → result
+    Minigame.js        CONTRATO de todo minigame (setup/start/update/isFinished/getHud/getLabels/getCameraFocus/getResults/dispose + static meta com camera e howTo)
+    GameManager.js     máquina de estados: menu (demo ao vivo no fundo) → countdown → playing ⇄ paused → result; refit() aplica meta.camera; navegação de menu por controle
     GameState.js       settings + lastConfig em localStorage ('treta-party:v1')
   characters/
     characters.js      4 personagens originais (Faísca, Broto, Parafuso, Glub)
     CharacterModel.js  modelo por primitivas dentro de um pod voador + CharacterAnimator (idle, lean, olhar, ataque, dano, vitória)
-    portraits.js       renderiza retratos em canvas offscreen → dataURL (usados na UI)
+    portraits.js       renderiza retratos em canvas offscreen → dataURL (usados na UI); fallback SVG se o WebGL falhar
   minigames/
     index.js           REGISTRO: MINIGAMES = [BoladaMinigame]; COMING_SOON
     bolada/
@@ -60,9 +66,10 @@ src/
       BoladaArena.js   visual estático/animado da arena
       BoladaView.js    liga sim → 3D; converte eventos em partículas, som, câmera, textos
       BoladaMinigame.js  cola: passo fixo, input humano, bots, hitstop/câmera lenta/acelerar
+    _modelo/           molde mínimo e funcional de minigame (NÃO registrado): copiar para criar o 02
   ui/
-    UI.js              telas DOM: main, setup, howto, settings, pause, result
-    HUD.js             painéis por jogador, cronômetro, rótulos 3D, floatText, banner, countdown, toque
+    UI.js              telas DOM: main, setup, howto, settings, pause, result; moveFocus()/activate() (navegação espacial por setas/controle)
+    HUD.js             painéis por jogador, cronômetro, rótulos 3D, floatText, banner, countdown, toque; topReserve(w, h) espelha os breakpoints do CSS
 test/sim.test.mjs
 ```
 
@@ -95,6 +102,9 @@ test/sim.test.mjs
 - **GLSL:** nunca usar `smoothstep` com edge0 > edge1; usar `1.0 - smoothstep(a, b, x)`.
 - **ShaderMaterial:** recebe cores sRGB cruas (sem conversão de color space).
 - **Nova regra de jogo:** entra em `BoladaSim` e emite evento; o feedback vai só em `BoladaView`.
+- **Enquadramento:** cada minigame declara `static meta.camera = { fitRadius, fitRadiusPortrait, labelRadius, labelHeight }`; `GameManager.refit()` aplica no `CameraRig` (em resize e ao trocar de minigame). A faixa do topo reservada ao HUD vem de `HUD.topReserve(w, h)`: se mudar o tamanho do cronômetro/rótulos no CSS, atualize lá.
+- **Resultado:** `getResults()` devolve `summary: [{ label, value }]`, que vira as colunas da tela de resultado (a UI não conhece estatísticas de nenhum minigame).
+- **Visual das bolas:** `BALL_VIS` (BoladaView) desenha as bolas 12% maiores que o raio de colisão; rastro na cor de quem rebateu por último; anel de alcance do pulso só para humanos.
 
 ## Mecânica (resumo)
 
@@ -105,7 +115,7 @@ test/sim.test.mjs
 - **Shift** = dash. O corpo do pod também rebate passivamente, adicionando efeito com a velocidade do pod.
 - **Lançador central:** mostra uma seta de aviso por 0.8s antes de cada disparo.
   - Mira mais em quem tem mais pontos (catch-up).
-  - O número de bolas cresce com o tempo.
+  - O número de bolas cresce com o tempo: 3 no início, +1 a cada 18s (máx. 6 e jogadores vivos + 2).
   - Bolas-bomba (valem 2) a partir de 35s.
 - Pilares-bumper nas divisórias e reator central dão boost.
 - **Pontos e fim de partida:**
@@ -114,12 +124,12 @@ test/sim.test.mjs
 
 ## Bots (dificuldade por comportamento, mesma física/velocidade)
 
-- **Fácil:** persegue a posição atual da bola (não prevê), reação 0.42s, erro grande, pulso afobado/ausente, distrai.
+- **Fácil:** persegue a posição atual da bola (não prevê), reação 0.36s, erro grande, pulso afobado ou ausente (50%), se distrai.
 - **Normal:** prevê o ponto onde a bola cruza o trilho, reação 0.22s.
 - **Difícil:**
   - Prevê 1 ricochete, reação 0.09s.
   - Espera a bola encostar para dar super.
-  - Posiciona-se para mirar no gol do adversário com menos pontos.
+  - Posiciona-se para mirar no gol do adversário com menos pontos (em empate, sorteia um alvo e o mantém).
   - Usa dash e lê a seta do lançador para se antecipar.
 
 ## Direção visual
@@ -152,95 +162,22 @@ test/sim.test.mjs
 - Um único momento de animação marcante: o logo "TRETA PARTY" com pop. Nada de fade-slide em tudo.
 - Respeitar `prefers-reduced-motion`, ter foco visível e ser responsivo. Controles de toque aparecem em `pointer: coarse`.
 
-## PENDÊNCIAS (fazer nesta ordem)
+## Testes no navegador (headless)
 
-### 1. `index.html`
-- `lang="pt-BR"`, viewport `width=device-width, initial-scale=1, viewport-fit=cover`.
-- Link do Google Fonts: Titan One + Baloo 2 (500, 700, 800).
-- `<div id="app"></div><div id="ui"></div>` e `<script type="module" src="/src/main.js">`.
+- O Chromium headless renderiza por software (SwiftShader, ~2,5 fps). Por isso o tempo real anda devagar lá. Para testar a jogabilidade, avance o tempo chamando `gm.update(1/60)` em loop via `window.__treta`, com `input.poll()` e `input.endFrame()` em volta.
+- Para deixar um bot jogando no lugar do humano: `mg.bots.push(new (mg.bots[0].constructor)(mg.sim, mg.human.seat, 'hard', Math.random)); mg.human = null`.
+- Um gamepad pode ser simulado sobrescrevendo `navigator.getGamepads`.
 
-### 2. `vite.config.js`
-- `base: './'`.
-- Com `mode === 'single'`: usar `viteSingleFile()` (já está em devDependencies) e `outDir: 'dist-single'`.
-- `build.target: 'es2022'`: há `static` class fields.
+## Próximos passos sugeridos
 
-### 3. `src/main.js` (wiring)
-1. `import './styles/main.css'`.
-2. `state = new GameState()`. Se não havia save e o usuário prefere reduced motion, fazer `settings.shake = false`.
-3. Criar os módulos:
-   - `engine = new Engine(#app, { quality })`
-   - `audio = new AudioManager()`
-   - `input = new Input()`
-   - `backdrop = new Backdrop(engine.scene)`
-   - `particles = { sparks: new ParticleSystem(scene, { max: 1600, additive: true }), dust: new ParticleSystem(scene, { max: 1200 }) }`
-   - `fx = new Effects(scene)`
-   - `rig = new CameraRig(engine.camera)`
-4. `portraits = renderPortraits(CHARACTERS)`.
-5. UI e HUD:
-   - `ui = new UI(#ui, { state, portraits, audio })`
-   - `hud = new HUD(#ui, { camera: engine.camera, portraits, audio, input })`
-6. `engine.onResize.push((w, h, bufH) => { rig.fit(w / h); particles.*.setViewport(bufH, rig.baseFov); gm.onResize(); })`.
-7. Criar `gm = new GameManager({ engine, rig, ui, hud, audio, input, state, particles, fx, backdrop })`.
-8. Ligar callbacks: `ui.onAction = gm.onAction.bind(gm)` e `hud.onPause = () => gm.pause()`.
-9. Chamar `engine._resize()` **depois** de registrar o onResize, e então `gm.boot()`.
-10. Destravar o áudio: `audio.unlock()` no primeiro `pointerdown`/`keydown` (é idempotente, pode deixar o listener).
-11. `visibilitychange` → `gm.pause()` se a aba ficar oculta durante a partida.
-12. Loop: `engine.start(dt => { input.poll(); gm.update(dt); input.endFrame(); })`.
-13. Expor `window.__treta = { gm, engine }` para testes.
-
-### 4. `src/styles/main.css` — classes que UI.js e HUD.js já usam
-
-- **Base:**
-  - `html, body` com altura 100%, sem scroll, fundo plum.
-  - `#app` fixo cobrindo a tela.
-  - `#ui` fixo, `pointer-events: none` e fonte UI.
-  - `.screens.on` e `.tbtn`/botões recebem `pointer-events: auto`.
-  - Safe areas via `env(safe-area-inset-*)`.
-- **Telas:**
-  - Estrutura: `.screen`, `.screen--main` (gradiente escuro da esquerda para ler o menu), `.screen--panel`, `.screen--center`, `.screen--result`.
-  - Menu: `.menu-col`, `.logo`, `.logo-1` (coral), `.logo-2` (sun), `.badge`, `.menu-buttons`, `.menu-foot`.
-  - Botões: `.btn`, `.btn--primary`, `.btn--xl`, `.btn--ghost`, com sombra dura, `:hover` subindo, `:active` afundando e `:focus-visible` mint.
-  - Painéis: `.panel`, `.panel--setup`, `.panel--howto`, `.panel--settings`, `.panel--pause`, `.panel--result`, `.panel-head`, `.panel-foot`, `.stack`.
-  - Setup: `.field`, `.field-grid`, `.field--wide`, `.hint`, `.mg-row`, `.mg-card` (`.is-on`, `.is-soon`), `.mg-num`.
-  - Personagens: `.char-grid`, `.char` (`[aria-pressed=true]`, usa `--c`), `.char-name`, `.char-sp`.
-  - Opções: `.seg`, `.opt` (`[aria-pressed=true]` = sun).
-  - Como jogar: `.howto` (grid SVG + texto), `.diagram`, `.howto-text`, `.lead`, `.keys`, `kbd`, `.small`, `.rules`.
-  - Configurações: `.set-row`.
-  - Resultado: `.result-kicker`, `.winner` (usa `--c`), `.ranking`, `.rank`, `.rank-place`, `.rank-who`, `.rank-stats`, `.result-buttons`, `em` (etiqueta "você").
-- **HUD:**
-  - Estrutura: `.hud` (`[hidden]` some) e `.hud--touch` (painéis de baixo sobem para o topo).
-  - Cronômetro: `.hud-timer` (`.danger` pulsa, `.sudden` vermelho) e `.hud-pause` (visível só no toque).
-  - Cantos: `.hud-corner--tl/tr/bl/br`.
-  - Painel por jogador:
-    - `.pl`: grid rosto/info/pontos, usa `--c`; estados `.hit` (tremida), `.danger`, `.is-out` (cinza + carimbo `.pl-out`), `.is-winner`.
-    - Partes: `.pl-face`, `.pl-info`, `.pl-name`, `.pl-pts`.
-    - `.pl-pips i` e `i.lost` (bolinhas de pontos).
-  - Rótulos 3D: `.hud-tags`, `.tag` (absolute left/top 0; o JS define `transform`), `.tag b`, `.tag--you span`, `.tag.danger`.
-  - Textos flutuantes: `.hud-floats`, `.float`, `.float--md/lg/xl` (span com animação de subir e sumir).
-  - Banner e contagem:
-    - `.hud-banner` (`.on` = pop; `b` na cor `--bc`; `span` em pílula).
-    - `.hud-count` (`.pop`; `.go` em mint).
-  - Dicas: `.hud-keys` (tira de teclas no início) e `.hud-hint`.
-  - Toque: `.touch`, `.touch-move`, `.touch-act`, `.tbtn` (`.on`), `.tbtn--hit`, `.tbtn--dash`.
-- **Responsivo:** abaixo de ~760px, `.pl` fica compacto (esconde pips) e painéis de UI usam largura total.
-
-### 5. Rodar e testar no navegador
-- Corrigir erros de console.
-- Ajustar intensidades de luz: são chutes para o modo de luz física do r170 (hemi 1.55, dir 2.3, point lights com decay 1.4).
-- Checar legibilidade das bolas contra o chão, o enquadramento em 16:9 e em retrato, e o tremor.
-- Jogar de verdade e ajustar `config.js`, principalmente:
-  - raio do pulso
-  - velocidades
-  - `spawn.addEvery`
-- Rodar `npm run test:sim` após cada mudança de tuning.
-
-### 6. `npm run build:single` e verificar que o HTML único funciona aberto direto.
-
-### 7. `README.md` em PT-BR: como rodar, controles, arquitetura, como adicionar minigame.
+- Jogar de verdade com teclado e controle em várias máquinas e revisar a sensação: velocidade do pod, janela da super (`superGap` 0.45 ≈ ±45ms a 10 u/s) e volume da trilha.
+- Desempenho em celulares fracos: hoje são ~460 draw calls, a maior parte vinda dos personagens (malhas + contornos). Mesclar as geometrias estáticas por material se for preciso.
+- Multiplayer local: `Input.getPlayer(slot)` já existe. Falta mapear um dispositivo por slot e permitir mais de um humano no setup (os assentos e a projeção tangencial do input já funcionam em qualquer lado).
+- Minigame 02 a partir de `src/minigames/_modelo/`.
 
 ## Pontos de atenção conhecidos
 
-- `renderPortraits` cria um segundo contexto WebGL temporário. Se falhar, a UI mostra imagem vazia: tratar com fallback de cor.
+- `renderPortraits` cria um segundo contexto WebGL temporário. Se falhar, cada personagem ganha um retrato SVG de reserva.
 - `CameraRig.update` chama `updateProjectionMatrix` todo quadro (necessário por FOV punch + viewOffset). OK, mas não duplicar.
 - `Input` só dá `preventDefault` no Espaço quando `captureGame` é true, para não quebrar botões nos menus.
 - A demo do menu usa bots e `demo: true` (sem som, sem HUD, sem mexer na câmera). Quando acaba, `GameManager` reinicia outra.
@@ -248,8 +185,7 @@ test/sim.test.mjs
 
 ## Como adicionar o Minigame 02
 
-1. Criar `src/minigames/<nome>/` com uma classe que estende `game/Minigame.js`, incluindo `static meta` (id, number, name, tagline, howTo).
-2. Reaproveitar `engine/*`, `characters/*` e o contrato de HUD (`getHud`, `getLabels`).
-3. Registrar em `src/minigames/index.js`.
+1. Copiar `src/minigames/_modelo/` para `src/minigames/<nome>/`. A classe estende `game/Minigame.js` e traz `static meta` (id, number, name, tagline, min/maxPlayers, camera, howTo com diagram/gamepad opcionais).
+2. Reaproveitar `engine/*`, `characters/*` e o contrato de HUD (`getHud`, `getLabels`) e de resultado (`getResults` com `summary`).
+3. Registrar em `src/minigames/index.js`. O setup já lista os minigames como botões (`data-key="minigameId"`), e o menu, o "Como jogar" e a demo seguem o minigame escolhido.
 4. Ideal: separar sim pura + bot + view como no Bolada, e escrever um `test/<nome>.test.mjs` headless.
-5. Pendente de UI: hoje a tela de setup mostra só o primeiro minigame como selecionado. Quando houver 2+, transformar `.mg-card` em botões com `data-action="set" data-key="minigameId"`.

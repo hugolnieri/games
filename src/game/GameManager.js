@@ -108,6 +108,7 @@ export class GameManager {
 
   _showResult() {
     this.mode = 'result';
+    this.rig.viewShiftTarget = this._menuShift();
     this.hud.hide();
     this.input.captureGame = false;
     this.ui.show('result', { results: this.mg.getResults(), meta: this.mg.constructor.meta });
@@ -147,7 +148,7 @@ export class GameManager {
   }
 
   onResize() {
-    if (this.mode === 'menu') this.rig.viewShiftTarget = this._menuShift();
+    if (this.mode === 'menu' || this.mode === 'result') this.rig.viewShiftTarget = this._menuShift();
   }
 
   update(dt) {

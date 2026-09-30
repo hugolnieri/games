@@ -88,6 +88,18 @@ export class HUD {
     }
   }
 
+  /**
+   * Pixels no topo da tela ocupados pelo HUD + altura de um rótulo de jogador.
+   * Espelha os breakpoints do CSS; a câmera usa isso para os rótulos nunca ficarem sob o cronômetro.
+   */
+  topReserve(w, h) {
+    const narrow = w <= 760, short = h <= 500;
+    const timer = short ? 50 : narrow ? 56 : 76;
+    const tag = narrow || short ? 40 : 47;
+    const pauseRow = this.touch && narrow ? 106 : 0; // no toque estreito, a pausa fica sob o cronômetro
+    return Math.max(timer, pauseRow) + tag + 6;
+  }
+
   show() {
     this.el.hidden = false;
   }

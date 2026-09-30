@@ -12,6 +12,9 @@ export class CameraRig {
     this.baseFov = 45;
     this.elev = (56 * Math.PI) / 180;
     this.fitRadius = 11.2;
+    // âncoras dos rótulos acima dos jogadores (raio/altura em unidades de mundo)
+    this.labelRadius = 8.85;
+    this.labelHeight = 2.6;
     this.pos = new THREE.Vector3(0, 40, 40);
     this.target = new THREE.Vector3();
     this.dPos = new THREE.Vector3();
@@ -53,8 +56,14 @@ export class CameraRig {
     this.punch = Math.min(6, this.punch + a * (this.shakeScale > 0 ? 1 : 0.3));
   }
 
-  /** Encontra a menor distância (e o melhor alvo em z) que mostram a arena inteira. */
-  fit(aspect) {
+  /**
+   * Encontra a menor distância (e o melhor alvo em z) que mostram a arena inteira.
+   * `reservePx` é a faixa do topo (em pixels, numa tela de `pxHeight`) que o HUD ocupa
+   * (cronômetro + altura dos rótulos acima dos jogadores): os rótulos nunca entram nela.
+   */
+  fit(aspect, pxHeight = 720, reservePx = 128) {
+    const portrait = aspect < 1;
+    this.elev = ((portrait ? 64 : 56) * Math.PI) / 180;
     const cam = new THREE.PerspectiveCamera(this.baseFov, aspect, 0.1, 500);
     const dir = new THREE.Vector3(0, Math.sin(this.elev), Math.cos(this.elev));
     const pts = [];
@@ -64,6 +73,13 @@ export class CameraRig {
       pts.push(new THREE.Vector3(Math.cos(a) * R, 0, Math.sin(a) * R));
       pts.push(new THREE.Vector3(Math.cos(a) * R, 2.2, Math.sin(a) * R));
     }
+    const labels = [];
+    for (let i = 0; i < 16; i++) {
+      const a = (i / 16) * Math.PI * 2;
+      labels.push(new THREE.Vector3(Math.cos(a) * this.labelRadius, this.labelHeight, Math.sin(a) * this.labelRadius));
+    }
+    const labelTop = 1 - (2 * reservePx) / Math.max(200, pxHeight);
+    const xLim = portrait ? 0.97 : 0.9;
     const v = new THREE.Vector3();
     const tgt = new THREE.Vector3();
     let best = { d: 80, tz: 0.5 };
@@ -76,9 +92,18 @@ export class CameraRig {
         let ok = true;
         for (const p of pts) {
           v.copy(p).project(cam);
-          if (Math.abs(v.x) > 0.9 || v.y > 0.84 || v.y < -0.8) {
+          if (Math.abs(v.x) > xLim || v.y > 0.84 || v.y < -0.8) {
             ok = false;
             break;
+          }
+        }
+        if (ok) {
+          for (const p of labels) {
+            v.copy(p).project(cam);
+            if (v.y > labelTop) {
+              ok = false;
+              break;
+            }
           }
         }
         if (ok) {

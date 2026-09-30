@@ -160,15 +160,17 @@ export class UI {
             <h3>Tempo</h3>
             <div class="seg" data-group>${[[120, '2:00'], [180, '3:00'], [0, 'Sem limite']].map(([v, l]) => this._opt('time', v, l, c.time, 'num')).join('')}</div>
           </div>
-          <div class="field field--wide">
+        </div>
+        <div class="setup-bottom">
+          <div class="field">
             <h3>Dificuldade dos bots</h3>
             <div class="seg" data-group>${DIFFICULTY.map(([v, l]) => this._opt('difficulty', v, l, c.difficulty)).join('')}</div>
             <p class="hint" id="diff-hint">${diff[2]}</p>
           </div>
+          <footer class="panel-foot">
+            <button class="btn btn--primary btn--xl" data-action="start" data-autofocus>COMEÇAR</button>
+          </footer>
         </div>
-        <footer class="panel-foot">
-          <button class="btn btn--primary btn--xl" data-action="start" data-autofocus>COMEÇAR</button>
-        </footer>
       </div>
     </section>`;
   }
@@ -193,10 +195,10 @@ export class UI {
             <circle r="14" fill="#2b2f5e" stroke="#ffd23f" stroke-width="4"/>
             <path d="M 18 -12 L 58 -40" stroke="#ffb347" stroke-width="6" stroke-linecap="round" stroke-dasharray="2 10"/>
             <circle cx="62" cy="-44" r="7" fill="#fff4d6" stroke="#1a1033" stroke-width="3"/>
-            <circle cx="0" cy="88" r="11" fill="#ff6b3d" stroke="#1a1033" stroke-width="4"/>
-            <circle cx="0" cy="88" r="24" fill="none" stroke="#ff6b3d" stroke-width="3" stroke-dasharray="4 5"/>
-            <path d="M -30 104 L -18 104 M 30 104 L 18 104" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
-            <text x="0" y="116" text-anchor="middle" font-size="12" fill="#fff" font-weight="800">você</text>
+            <circle cx="0" cy="86" r="24" fill="none" stroke="#ff6b3d" stroke-width="3" stroke-dasharray="4 5"/>
+            <circle cx="0" cy="86" r="11" fill="#ff6b3d" stroke="#1a1033" stroke-width="4"/>
+            <path d="M -30 80 l -12 6 l 12 6 z M 30 80 l 12 6 l -12 6 z" fill="#fff" stroke="#1a1033" stroke-width="3" stroke-linejoin="round"/>
+            <text x="0" y="56" text-anchor="middle" font-size="15" font-weight="800" fill="#fff" stroke="#1a1033" stroke-width="5" paint-order="stroke" stroke-linejoin="round">você</text>
           </svg>
           <div class="howto-text">
             <p class="lead">${esc(h.objective)}</p>

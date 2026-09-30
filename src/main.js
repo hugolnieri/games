@@ -52,6 +52,20 @@ hud.onPause = () => gm.pause();
 engine._resize();
 gm.boot();
 
+// convite: ?sala=ABCD já entra na sala do amigo
+try {
+  const params = new URLSearchParams(location.search);
+  const sala = params.get('sala');
+  if (sala) {
+    params.delete('sala');
+    const rest = params.toString();
+    history.replaceState(null, '', location.pathname + (rest ? '?' + rest : '') + location.hash);
+    gm.onAction('net-join', { code: sala });
+  }
+} catch {
+  /* URL sem suporte (file://): segue para o menu */
+}
+
 // ---------- áudio: navegadores só liberam após um gesto do usuário ----------
 const unlock = () => audio.unlock();
 window.addEventListener('pointerdown', unlock);

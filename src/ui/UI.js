@@ -149,6 +149,23 @@ export class UI {
     else this.moveFocus('down');
   }
 
+  /** Aviso rápido no rodapé da tela. */
+  toast(text) {
+    let t = document.querySelector('.toast');
+    if (!t) {
+      t = document.createElement('div');
+      t.className = 'toast';
+      t.setAttribute('role', 'status');
+      document.getElementById('ui').appendChild(t);
+    }
+    t.textContent = text;
+    t.classList.remove('on');
+    void t.offsetWidth;
+    t.classList.add('on');
+    clearTimeout(this._toastT);
+    this._toastT = setTimeout(() => t.classList.remove('on'), 3500);
+  }
+
   back() {
     if (['setup', 'howto', 'settings', 'online'].includes(this.current)) {
       this.audio.play('uiBack');
@@ -419,7 +436,16 @@ export class UI {
           <h2 id="lobby-title">Sala <span class="room-code">${esc(d.code)}</span></h2>
           <button class="btn btn--ghost" data-action="net-leave">Sair</button>
         </header>
-        ${d.isHost ? `<p class="lead-sm">Passe o código <b>${esc(d.code)}</b> para seu amigo. Ele entra em <b>JOGAR ONLINE → Entrar numa sala</b>.</p>` : '<p class="lead-sm">Você está na sala! Esperando o anfitrião começar a partida.</p>'}
+        ${
+          d.isHost
+            ? `<div class="invite">
+                <p class="lead-sm">Mande o convite para seu amigo: o link já entra direto na sala. Ou passe o código <b>${esc(d.code)}</b> (ele digita em <b>JOGAR ONLINE → Entrar numa sala</b>).</p>
+                <button class="btn btn--online" data-action="net-share">ENVIAR CONVITE</button>
+              </div>
+              <p class="hint">No celular, deixe esta tela aberta até seu amigo entrar. Se sair do jogo, a sala tenta se reconectar sozinha quando você voltar.</p>
+              ${d.status !== 'online' ? '<p class="net-msg" role="status">Reconectando a sala ao servidor…</p>' : ''}`
+            : '<p class="lead-sm">Você está na sala! Esperando o anfitrião começar a partida.</p>'
+        }
         <div class="field">
           <h3>Jogadores</h3>
           <ul class="members">${members}${slots}</ul>

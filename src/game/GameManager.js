@@ -210,6 +210,7 @@ export class GameManager {
       case 'net-char': this.online?.setCharacter(data.value); break;
       case 'net-set': this.online?.setOption(data.key, data.type === 'num' ? Number(data.value) : data.value); break;
       case 'net-start': this.online?.startGame(); break;
+      case 'net-share': this.online?.share(); break;
       case 'net-lobby':
         if (this.online?.isHost) {
           this.online.showLobby();

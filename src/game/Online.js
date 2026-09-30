@@ -34,6 +34,60 @@ export class OnlineSession {
     this.net.onError = (err) => {
       if (this.role === 'client') this._lost(errorText(err));
     };
+    this.netStatus = 'online';
+    this.net.onStatus = (st) => {
+      if (st === this.netStatus) return;
+      this.netStatus = st;
+      if (!this.inMatch && this.gm.ui.current === 'lobby') this.gm.ui.show('lobby', this.lobbyData());
+    };
+    this.wakeLock = null;
+    this._onVis = () => {
+      if (document.visibilityState === 'visible' && this.role) this._keepAwake();
+    };
+    document.addEventListener('visibilitychange', this._onVis);
+  }
+
+  /** Tela sempre acesa enquanto a sala está aberta (no celular, bloquear a tela derruba a sala). */
+  async _keepAwake() {
+    try {
+      if (!this.wakeLock && navigator.wakeLock) {
+        this.wakeLock = await navigator.wakeLock.request('screen');
+        this.wakeLock.addEventListener?.('release', () => (this.wakeLock = null));
+      }
+    } catch {
+      /* sem suporte ou sem permissão: segue sem */
+    }
+  }
+
+  /** Link que já entra direto na sala. */
+  inviteUrl() {
+    const u = new URL(location.href);
+    u.search = '';
+    u.hash = '';
+    u.searchParams.set('sala', this.code);
+    const peer = new URLSearchParams(location.search).get('peer');
+    if (peer) u.searchParams.set('peer', peer);
+    return u.toString();
+  }
+
+  /** Compartilha o convite (menu nativo do celular) ou copia o link. */
+  async share() {
+    const url = this.inviteUrl();
+    const text = `Bora jogar Treta Party! Sala ${this.code}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: 'Treta Party', text, url });
+        return;
+      }
+    } catch (err) {
+      if (err?.name === 'AbortError') return;
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      this.gm.ui.toast('Link copiado! Cole na conversa com seu amigo.');
+    } catch {
+      this.gm.ui.toast(url);
+    }
   }
 
   get isHost() {
@@ -52,6 +106,7 @@ export class OnlineSession {
       return;
     }
     this.members = [{ id: 'host', conn: null, characterId: this.gm.state.lastConfig.characterId }];
+    this._keepAwake();
     this.showLobby();
   }
 
@@ -71,10 +126,14 @@ export class OnlineSession {
       this.gm.ui.show('online', { error: errorText(err), code });
       return;
     }
+    this._keepAwake();
     this.net.send(this.conn, { t: 'hello', characterId: this.gm.state.lastConfig.characterId });
   }
 
   leave() {
+    document.removeEventListener('visibilitychange', this._onVis);
+    this.wakeLock?.release?.().catch?.(() => {});
+    this.wakeLock = null;
     this.net.close();
     this.role = null;
     this.inMatch = false;
@@ -95,6 +154,8 @@ export class OnlineSession {
       members: this.members.map((m) => ({ characterId: m.characterId })),
       settings: this.settings,
       maxPlayers: MAX_PLAYERS,
+      status: this.isHost ? this.netStatus : 'online',
+      canShare: true,
     };
   }
 

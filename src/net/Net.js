@@ -10,7 +10,8 @@ import Peer from 'peerjs';
 const PREFIX = 'treta-party-v1-';
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sem 0/O e 1/I para não confundir
 const ERRORS = {
-  'peer-unavailable': 'Sala não encontrada. Confira o código.',
+  'peer-unavailable':
+    'Sala não encontrada. Confira o código e peça para quem criou a sala deixar o jogo aberto na tela (no celular, trocar de app pode derrubar a sala).',
   'unavailable-id': 'Código em uso, tentando outro…',
   network: 'Sem conexão com o servidor de salas. Verifique a internet.',
   'server-error': 'O servidor de salas não respondeu. Tente de novo.',
@@ -51,6 +52,39 @@ export class Net {
     this.onMessage = () => {};
     this.onClose = () => {};
     this.onError = () => {};
+    this.onStatus = () => {}; // 'online' | 'reconnecting' (host: registro da sala no servidor)
+    this._reconnT = null;
+    this._onVisible = () => {
+      if (document.visibilityState === 'visible') this._reconnect(0);
+    };
+  }
+
+  /**
+   * Host: se a conexão com o servidor de salas cair (ex.: iPhone congela a aba ao trocar de app),
+   * registra o mesmo código de novo. As conexões já abertas com amigos seguem funcionando.
+   */
+  _keepAlive(peer) {
+    peer.on('disconnected', () => {
+      this.onStatus('reconnecting');
+      this._reconnect(800);
+    });
+    document.addEventListener('visibilitychange', this._onVisible);
+  }
+
+  _reconnect(delay) {
+    const peer = this.peer;
+    if (!peer || peer.destroyed || !peer.disconnected) return;
+    clearTimeout(this._reconnT);
+    this._reconnT = setTimeout(() => {
+      if (!peer.destroyed && peer.disconnected) {
+        try {
+          peer.reconnect();
+        } catch {
+          /* tenta de novo abaixo */
+        }
+        this._reconnT = setTimeout(() => this._reconnect(0), 3000);
+      }
+    }, delay);
   }
 
   /** Cria a sala. Resolve com o código. */
@@ -60,8 +94,11 @@ export class Net {
       const peer = new Peer(PREFIX + code, peerOptions());
       let opened = false;
       peer.on('open', () => {
+        this.onStatus('online');
+        if (opened) return; // reabriu depois de uma reconexão
         opened = true;
         this.peer = peer;
+        this._keepAlive(peer);
         resolve(code);
       });
       peer.on('connection', (conn) => this._wire(conn, true));
@@ -75,31 +112,52 @@ export class Net {
     });
   }
 
-  /** Entra na sala de outro jogador. */
+  /**
+   * Entra na sala de outro jogador. Se a sala ainda não aparecer no servidor (o host pode estar
+   * reconectando), tenta de novo por alguns segundos antes de desistir.
+   */
   join(code) {
     return new Promise((resolve, reject) => {
       const peer = new Peer(undefined, peerOptions());
       this.peer = peer;
-      let done = false;
-      const fail = (err) => {
-        if (done) return this.onError(err);
+      let done = false, tries = 0, attemptT = null;
+      const finish = (err, conn) => {
+        if (done) return;
         done = true;
         clearTimeout(timer);
-        peer.destroy();
-        reject(err);
+        clearTimeout(attemptT);
+        if (err) {
+          peer.destroy();
+          reject(err);
+        } else resolve(conn);
       };
-      const timer = setTimeout(() => fail({ type: 'timeout', message: 'Tempo esgotado ao conectar. Confira o código e a internet.' }), 15000);
-      peer.on('error', fail);
-      peer.on('open', () => {
+      const timer = setTimeout(
+        () => finish(tries > 0 ? { type: 'peer-unavailable' } : { type: 'timeout', message: 'Tempo esgotado ao conectar. Confira a internet.' }),
+        25000,
+      );
+      const attempt = () => {
+        if (done) return;
+        tries++;
         const conn = peer.connect(PREFIX + normalizeCode(code), { reliable: true, serialization: 'json' });
         conn.on('open', () => {
-          if (done) return;
-          done = true;
-          clearTimeout(timer);
+          if (done) return conn.close();
           this._wire(conn, false);
-          resolve(conn);
+          finish(null, conn);
         });
-        conn.on('error', fail);
+      };
+      peer.on('error', (err) => {
+        if (done) return this.onError(err);
+        if (err.type === 'peer-unavailable' && tries < 6) {
+          attemptT = setTimeout(attempt, 2500); // host pode estar voltando para o jogo
+          return;
+        }
+        finish(err);
+      });
+      peer.on('disconnected', () => {
+        if (!done && !peer.destroyed) peer.reconnect();
+      });
+      peer.on('open', () => {
+        if (tries === 0) attempt();
       });
     });
   }
@@ -129,6 +187,8 @@ export class Net {
   }
 
   close() {
+    clearTimeout(this._reconnT);
+    document.removeEventListener('visibilitychange', this._onVisible);
     for (const c of this.conns) c.close();
     this.conns.clear();
     this.peer?.destroy();

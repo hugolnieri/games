@@ -7,6 +7,8 @@ import { lerp, wrapAngle, clamp } from '../../engine/math.js';
 
 const R = C.arenaRadius;
 const NO_SFX = () => {};
+const BALL_VIS = 1.12; // bolas um pouco maiores que o raio de colisão: leitura melhor, sem mexer na física
+const TRAIL_NEUTRAL = 0xe8e0ff;
 
 function ballTexture(bomb) {
   const c = document.createElement('canvas');
@@ -69,7 +71,17 @@ export class BoladaView {
       shadow.position.y = 0.015;
       this.root.add(model.root, shadow);
       const pod = sim.pods[p.seat];
-      this.pods[p.seat] = { player: p, model, anim, shadow, prevX: pod.x, prevZ: pod.z, out: null };
+      let range = null;
+      if (p.isHuman && !demo) {
+        // anel de alcance do pulso: forte quando o pulso está pronto, apagado no cooldown
+        range = new THREE.Mesh(
+          new THREE.RingGeometry(C.pulse.radius - 0.07, C.pulse.radius, 72).rotateX(-Math.PI / 2),
+          new THREE.MeshBasicMaterial({ color: p.def.color, transparent: true, opacity: 0.3, depthWrite: false }),
+        );
+        range.renderOrder = 2;
+        this.root.add(range);
+      }
+      this.pods[p.seat] = { player: p, model, anim, shadow, range, prevX: pod.x, prevZ: pod.z, out: null };
     }
 
     this.textures = { normal: ballTexture(false), bomb: ballTexture(true) };
@@ -102,7 +114,7 @@ export class BoladaView {
   _attach(b) {
     const bv = this.pool[b.type].pop() || this._makeBall(b.type);
     bv.group.visible = bv.shadow.visible = true;
-    bv.group.scale.setScalar(0.2);
+    bv.group.scale.setScalar(0.2 * BALL_VIS);
     bv.flying = null;
     bv.spawnT = 0;
     bv.lastX = b.x;
@@ -150,6 +162,12 @@ export class BoladaView {
     m.position.set(x, 0, z);
     if (pv.anim.mode !== 'victory') m.rotation.y = Math.atan2(-x, -z);
     pv.shadow.position.set(x, 0.015, z);
+    if (pv.range) {
+      pv.range.position.set(x, 0.035, z);
+      const ready = pod.pulseCd <= 0;
+      const target = !pod.active || this.sim.finished ? 0 : ready ? 0.32 : 0.07;
+      pv.range.material.opacity += (target - pv.range.material.opacity) * 0.35;
+    }
     return { x, z };
   }
 
@@ -285,11 +303,11 @@ export class BoladaView {
     if (pv.player.isHuman) this.sfx('goalMine');
     ctx.rig.addTrauma(e.value > 1 ? 0.5 : 0.32);
     const a = SEAT_ANGLES[e.seat];
-    hud.floatText([Math.cos(a) * (R - 1.4), 1.4, Math.sin(a) * (R - 1.4)], `−${e.value}`, { color: col, size: 'xl' });
+    hud.floatText([Math.cos(a) * (R - 3.4), 0.8, Math.sin(a) * (R - 3.4)], `−${e.value}`, { color: col, size: 'xl' });
     if (e.scorer >= 0 && e.scorer !== e.seat) {
       const sv = this.pods[e.scorer];
       const pos = sv.model.root.position;
-      hud.floatText([pos.x, 2.6, pos.z], 'BOLADA!', { color: sv.player.def.color, size: 'md' });
+      hud.floatText([pos.x * 0.8, 1.2, pos.z * 0.8], 'BOLADA!', { color: sv.player.def.color, size: 'md' });
     }
   }
 
@@ -386,8 +404,8 @@ export class BoladaView {
       const x = pr ? lerp(pr[0], b.x, alpha) : b.x;
       const z = pr ? lerp(pr[1], b.z, alpha) : b.z;
       bv.spawnT = Math.min(1, bv.spawnT + dt * 6);
-      bv.group.scale.setScalar(0.2 + 0.8 * bv.spawnT);
-      bv.group.position.set(x, b.r, z);
+      bv.group.scale.setScalar((0.2 + 0.8 * bv.spawnT) * BALL_VIS);
+      bv.group.position.set(x, b.r * BALL_VIS, z);
       bv.shadow.position.set(x, 0.016, z);
       // rolagem
       const mx = x - bv.lastX, mz = z - bv.lastZ;
@@ -400,6 +418,13 @@ export class BoladaView {
       bv.lastZ = z;
       const speed = Math.hypot(b.vx, b.vz);
       const hitCol = b.lastHitBy >= 0 && this.pods[b.lastHitBy] ? this.pods[b.lastHitBy].player.def.color : 0xfff4d6;
+      // rastro: mostra a direção da bola e (pela cor) quem rebateu por último
+      if (gdt > 0 && dist > 1e-3) {
+        dust.emit({
+          x, y: b.r * 0.9, z, count: 1, speed: 0, color: b.lastHitBy >= 0 ? hitCol : TRAIL_NEUTRAL,
+          size: b.r * 1.7, sizeEnd: 0.05, life: 0.2, lifeVar: 0, alpha: 0.45, drag: 0,
+        });
+      }
       if (b.super > 0 || speed > 15) {
         const s = b.super > 0 ? 1 : 0.6;
         sparks.emit({ x, y: b.r, z, count: 1, speed: 0.3, color: b.super > 0 ? 0xffffff : hitCol, color2: hitCol, size: b.r * 2.1 * s, sizeEnd: 0, life: 0.22, lifeVar: 0.1 });
@@ -421,7 +446,7 @@ export class BoladaView {
         p.y += f.vy * gdt;
         p.z += f.vz * gdt;
         bv.shadow.visible = false;
-        bv.group.scale.setScalar(Math.max(0.1, 1 - f.t * 0.6));
+        bv.group.scale.setScalar(Math.max(0.1, 1 - f.t * 0.6) * BALL_VIS);
         if (f.t > 1.4) this._release(id);
       } else if (!seen.has(id)) {
         this._release(id);

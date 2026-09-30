@@ -22,7 +22,7 @@ export const BOLADA = {
     window: 0.12, // tempo em que o pulso fica ativo
     cooldown: 0.55,
     speed: 16,
-    superGap: 0.45, // bola quase encostando = super rebatida
+    superGap: 0.45, // bola quase encostando (ou recém-rebatida pelo corpo) = super rebatida
     superSpeed: 23,
   },
 
@@ -40,8 +40,8 @@ export const BOLADA = {
   spawn: {
     firstDelay: 0.6,
     telegraph: 0.8, // aviso antes de cada disparo
-    minGap: 1.3,
-    startBalls: 2,
+    minGap: 0.8, // pausa mínima entre um disparo e o próximo aviso
+    startBalls: 3,
     maxBalls: 6,
     addEvery: 18, // +1 bola simultânea a cada N segundos
     bombAfter: 35,

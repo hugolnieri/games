@@ -14,8 +14,8 @@ import { clamp, wrapAngle, gauss, rayCircleExit } from '../../engine/math.js';
  */
 export const BOT_PROFILES = {
   easy: {
-    label: 'Fácil', reaction: 0.42, noise: 1.1, mode: 'follow', bounces: 0, horizon: 9,
-    pulseChance: 0.35, earlyPulse: 0.45, perfect: false, aim: false, dash: false, idle: 'wander', distraction: 0.15,
+    label: 'Fácil', reaction: 0.36, noise: 0.9, mode: 'follow', bounces: 0, horizon: 9,
+    pulseChance: 0.5, earlyPulse: 0.35, perfect: false, aim: false, dash: false, idle: 'wander', distraction: 0.15,
   },
   normal: {
     label: 'Normal', reaction: 0.22, noise: 0.45, mode: 'intercept', bounces: 0, horizon: 2.2,
@@ -42,6 +42,7 @@ export class BoladaBot {
     this.decisions = new Map();
     this.phase = rng() * 10;
     this.wantDash = false;
+    this.victimSeat = -1;
   }
 
   update(dt) {
@@ -139,8 +140,15 @@ export class BoladaBot {
   _aimOffset(ballOff) {
     const victims = this.sim.activePods().filter((p) => p.seat !== this.seat);
     if (!victims.length) return 0;
-    let v = victims[0];
-    for (const p of victims) if (p.points < v.points) v = p;
+    const min = Math.min(...victims.map((p) => p.points));
+    const weakest = victims.filter((p) => p.points === min);
+    // Empate: sorteia um alvo e mantém enquanto continuar entre os mais fracos.
+    // (Pegar sempre o primeiro da lista fazia todos os bots mirarem no assento 0, o do humano.)
+    let v = weakest.find((p) => p.seat === this.victimSeat);
+    if (!v) {
+      v = weakest[Math.floor(this.rng() * weakest.length)];
+      this.victimSeat = v.seat;
+    }
     const va = SEAT_ANGLES[v.seat] - Math.sign(v.off || 1) * 0.3; // canto oposto ao pod da vítima
     const gx = Math.cos(va) * this.sim.R, gz = Math.sin(va) * this.sim.R;
     const a = this.theta + ballOff;

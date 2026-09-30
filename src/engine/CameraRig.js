@@ -12,6 +12,7 @@ export class CameraRig {
     this.baseFov = 45;
     this.elev = (56 * Math.PI) / 180;
     this.fitRadius = 11.2;
+    this.fitRadiusPortrait = 10.5; // no retrato a largura manda: corta só a espessura da parede externa
     // âncoras dos rótulos acima dos jogadores (raio/altura em unidades de mundo)
     this.labelRadius = 8.85;
     this.labelHeight = 2.6;
@@ -67,7 +68,7 @@ export class CameraRig {
     const cam = new THREE.PerspectiveCamera(this.baseFov, aspect, 0.1, 500);
     const dir = new THREE.Vector3(0, Math.sin(this.elev), Math.cos(this.elev));
     const pts = [];
-    const R = this.fitRadius;
+    const R = portrait ? this.fitRadiusPortrait : this.fitRadius;
     for (let i = 0; i < 24; i++) {
       const a = (i / 24) * Math.PI * 2;
       pts.push(new THREE.Vector3(Math.cos(a) * R, 0, Math.sin(a) * R));

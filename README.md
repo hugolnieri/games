@@ -8,6 +8,12 @@ A estrutura se inspira nos minigames de party games clássicos, mas tudo aqui é
 
 ---
 
+## Jogar agora
+
+**https://treta-party.vercel.app**: funciona no celular (iPhone e Android) e no computador, e é o link para mandar aos amigos jogarem online.
+
+---
+
 ## Como rodar
 
 Requisito: [Node.js](https://nodejs.org) 18 ou mais novo.

@@ -34,6 +34,33 @@ em `art-src/chars/`. Cada ficha foi gerada em 1:1, fundo transparente, qualidade
 Todos são baixinhos, de braços curtos, e andam em um veículo da cor deles. O modelo 3D jogável
 carrega as mesmas marcas (ver "Elenco: personalidade" no `CLAUDE.md`).
 
+## Malhas 3D jogáveis (personagem esculpido no lugar das primitivas)
+
+Fluxo por personagem: **imagem de corpo inteiro → `generate_3d` → GLB → `tools/models.mjs`**.
+
+1. **Imagem de base** (`gpt_image_2_6`, 1:1, fundo transparente, ficha do personagem como
+   `image_references`). O personagem sozinho, em pé, sem pod nem veículo, da cabeça aos pés:
+
+   > The same <personagem> from the reference, but standing on its own with NO vehicle and NO
+   > flying saucer: full body visible from head to feet, short stubby legs and small round feet,
+   > chunky chibi proportions with a big head. Neutral relaxed standing pose facing the camera,
+   > slight three-quarter view, arms slightly away from the body, <marcas de personalidade>.
+   > No effects, no motion lines, no shadow, no ground. **3D rendered toy figurine with soft
+   > volumetric shading and highlights**, smooth rounded sculpted shapes, transparent background.
+
+   **Atenção:** a imagem precisa parecer um render 3D, com sombreado suave. Com cores totalmente
+   chapadas (estilo adesivo/vetor) o conversor devolve um recorte plano, sem volume. Foi o que
+   aconteceu na primeira tentativa da Pipoca. Exemplo que funcionou: `docs/malha-referencia-faisca.png`.
+2. **Malha:** `generate_3d` com `model: 'sam_3_3d'`, `export_textured_glb: true` e a imagem em
+   `medias: [{ role: 'image', value: <job da imagem> }]`. Custa 1 crédito. (Meshy e Tripo dão
+   malhas melhores e com esqueleto, mas custam de 30 a 38 créditos cada.)
+3. **Conferir antes de integrar:** a malha tem de ter profundidade (tamanho em z parecido com x).
+4. Salvar em `art-src/models/<id>.glb` e rodar `node tools/models.mjs art-src/models`
+   (simplifica, textura WebP 512, ~190 kB). O jogo passa a usar a malha sozinho; quem não tem
+   malha continua no modelo de primitivas.
+
+Estado: **Faísca** tem malha. Broto, Parafuso, Glub, Jujuba e Pipoca ainda usam primitivas.
+
 ### Skins (trocar só a paleta do corpo, manter silhueta)
 
 `<descrição do personagem>, same character and silhouette, recolored body: <paleta>` com as paletas

@@ -65,12 +65,14 @@ export function blobShadow(size = 1, opacity = 0.35) {
 
 export function disposeTree(obj) {
   obj.traverse((o) => {
-    if (o.geometry && !o.userData.isOutline && o.geometry !== blobGeo) o.geometry.dispose();
+    // malhas de personagem (sharedGeo) e suas texturas/materiais são compartilhados entre modelos
+    if (o.geometry && !o.userData.isOutline && !o.userData.sharedGeo && o.geometry !== blobGeo) o.geometry.dispose();
     if (o.material && !o.userData.isOutline) {
       const mats = Array.isArray(o.material) ? o.material : [o.material];
       for (const m of mats) {
         if ([...outlineMats.values()].includes(m)) continue;
-        if (m.map && m.map !== blobTex) m.map.dispose();
+        if (m.userData.shared) continue;
+        if (m.map && m.map !== blobTex && !m.map.userData.shared) m.map.dispose();
         m.dispose();
       }
     }

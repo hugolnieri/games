@@ -9,6 +9,7 @@ import { CameraRig } from './engine/CameraRig.js';
 import { GameState } from './game/GameState.js';
 import { GameManager } from './game/GameManager.js';
 import { Portraits } from './characters/portraits.js';
+import { preloadMeshes } from './characters/meshes.js';
 import { UI } from './ui/UI.js';
 import { HUD } from './ui/HUD.js';
 
@@ -49,6 +50,8 @@ ui.onAction = gm.onAction.bind(gm);
 hud.onPause = () => gm.pause();
 
 engine._resize();
+// malhas esculpidas dos personagens: espera um pouco por elas antes de montar a primeira cena
+await preloadMeshes();
 gm.boot();
 
 // convite: ?sala=ABCD já entra na sala do amigo

@@ -16,6 +16,7 @@ npm install
 npm run dev            # desenvolvimento
 npm run test:sim       # partidas headless só de bots: Bolada (test/sim.test.mjs) + os 7 de arena (test/minigames.test.mjs)
 node tools/art.mjs art-src   # otimiza arte gerada (PNG → WebP) e reescreve src/assets/art.js
+node tools/models.mjs art-src/models   # otimiza malhas de personagem (GLB) e reescreve src/assets/models.js
 npm run build          # build normal (dist/)
 npm run build:single   # HTML único com tudo inline (dist-single/), abre direto do disco (file://)
 ```
@@ -63,6 +64,7 @@ src/
     cosmetics.js       CATÁLOGO da loja: SKINS por personagem, ACCESSORIES, POSES, preços, matchReward()
     CharacterModel.js  modelo por primitivas (pod opcional) + acessórios na cabeça + CharacterAnimator (idle, lean, olhar, ataque, dano, 5 poses de vitória)
     rigs.js            veículo por minigame (bumper, pogo, feet, tank, kart, board, blaster) + createAvatar(player, rig)
+    meshes.js          malhas esculpidas (GLB do Higgsfield): preloadMeshes, getMesh, meshTexture (skins), hullMaterial, MESH_FIT
     portraits.js       Portraits: estúdio offscreen com cache; of(look) e poseFrames(look) (prévia animada da loja); fallback SVG
   assets/
     art.js             GERADO por tools/art.mjs: ART.minigames[id], ART.chars[id], ART.key (WebP em assets/art/)
@@ -88,6 +90,7 @@ src/
     HUD.js             painéis por jogador, cronômetro, rótulos 3D, floatText, banner, countdown, regras rápidas, toque (◀ ▶ ou direcional analógico por meta.touch); topReserve(w, h) espelha os breakpoints do CSS
 test/sim.test.mjs, test/minigames.test.mjs
 tools/art.mjs         PNG gerado → WebP otimizado + src/assets/art.js
+tools/models.mjs      GLB gerado → malha otimizada em src/assets/models/ + src/assets/models.js
 docs/direcao-visual-higgsfield.md   prompts por personagem e arena, e como integrar
 ```
 
@@ -150,6 +153,7 @@ Cada personagem tem um temperamento que precisa aparecer em **três lugares**: n
 | Jujuba | fofa e casca-grossa | orelha mordida, laço, curativo em X, patas enfaixadas | guarda de boxe com jab alternado, piscadela |
 | Pipoca | hiperativa, caótica | olhos esbugalhados de tamanhos diferentes, bico aberto, topete de pipoca, casca de ovo listrada | cabeça aos trancos, asas batendo sem parar, bico piando |
 
+- **Malha esculpida** (`characters/meshes.js`, `src/assets/models/<id>.glb`): quando o personagem tem uma, `createCharacterModel` usa a malha (material toon com a textura, contorno por casco empurrado pela normal) no lugar do corpo de primitivas; sem malha, cai nas primitivas. Hoje só a **Faísca** tem. A malha é rígida (sem esqueleto): o `CharacterAnimator` anima o corpo inteiro (olhar, bote, tremor no dano, poses de vitória) e `quirk` dá o trejeito. Skins repintam o tom principal da textura (`meshTexture`); acessórios usam `MESH_FIT`. `main.js` espera `preloadMeshes()` antes de montar a primeira cena. Como gerar mais: `docs/direcao-visual-higgsfield.md` e `node tools/models.mjs art-src/models`.
 - Sobrancelhas (`addBrow`) reagem ao humor no `CharacterAnimator`: bravas no ataque, caídas no dano, erguidas na vitória. `extras.mouthRest` define a boca em repouso (Glub faz bico).
 - Com chapéu equipado (`hat`), o enfeite do topo da cabeça (topete, broto, parafusão, laço, pipoca) sai para dar lugar ao acessório.
 - Falas em `characters.js`: `bio`, `quote` (bordão), `win` e `lose`. Aparecem na ficha (setup e loja), no banner de vitória e na tela de resultado.

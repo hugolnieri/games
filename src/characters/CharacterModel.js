@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { toon, withOutline, INK } from '../engine/toon.js';
 import { clamp, damp, lerp } from '../engine/math.js';
+import { getMesh, meshFit, meshTexture, hullMaterial, MESH_HEIGHT } from './meshes.js';
 
 const sphere = (r, w = 18, h = 14) => new THREE.SphereGeometry(r, w, h);
 const basic = (color) => new THREE.MeshBasicMaterial({ color });
@@ -132,7 +133,44 @@ export function createCharacterModel(def, { pod: withPod = true } = {}) {
   const hat = ['acc-coroa', 'acc-cartola', 'acc-bone', 'acc-helice', 'acc-chifres'].includes(def.acc);
   const cyl = (rt, rb, h, seg = 10) => new THREE.CylinderGeometry(rt, rb, h, seg);
 
-  switch (def.id) {
+  // ---- malha esculpida (Higgsfield): substitui o corpo de primitivas quando existe ----
+  const sculpt = getMesh(def.id);
+  let fig = null;
+  let anch = def.anch || {};
+  if (sculpt) {
+    const fit = meshFit(def.id), H = MESH_HEIGHT, baseY = -0.3; // pés um pouco abaixo da borda do pod
+    const mat = toon(0xffffff, { map: meshTexture(def.id, def.team ?? def.color, def.color) });
+    mats.push(mat);
+    fig = new THREE.Mesh(sculpt.geometry, mat);
+    fig.userData.sharedGeo = true;
+    const ink = new THREE.Mesh(sculpt.geometry, hullMaterial());
+    ink.userData.isOutline = true;
+    fig.add(ink);
+    fig.scale.setScalar(H);
+    fig.position.y = baseY;
+    body.add(fig);
+    head.position.y = baseY + H * fit.head; // só ancora os acessórios
+    anch = { hat: [H * fit.hat, 0], face: [H * fit.face[0], H * fit.face[1]], w: H * fit.w };
+    mouth.visible = false;
+    // trejeito de corpo inteiro por temperamento
+    const quirk = {
+      faisca: (t) => [Math.abs(Math.sin(t * 6.5)) * 0.03, Math.sin(t * 6.5) * 0.035],
+      broto: (t) => [0, Math.sin(t * 0.9) * 0.07],
+      parafuso: (t) => [Math.sin(t * 31) > 0.9 ? 0.02 : 0, Math.sin(t * 2.3) * 0.04],
+      glub: (t) => [0, Math.sin(t * 0.7) * 0.03],
+      jujuba: (t) => [Math.abs(Math.sin(t * 3.3)) * 0.04, Math.sin(t * 3.3) * 0.05],
+      pipoca: (t) => [Math.abs(Math.sin(t * 9)) * 0.05, (Math.floor(t * 2.6) % 2 ? 1 : -1) * 0.07],
+    }[def.id];
+    extras.tick = (t) => {
+      const [dy, rz] = quirk ? quirk(t) : [0, 0];
+      fig.position.y = baseY + dy;
+      fig.rotation.z = rz;
+    };
+  }
+
+  switch (sculpt ? '__malha' : def.id) {
+    case '__malha':
+      break;
     // Faísca: esquentada e exibida. Sobrancelha brava, presinha, óculos de corrida, rabo de raio.
     case 'faisca': {
       body.add(part(sphere(0.4), def.color, { pos: [0, 0.18, 0], scale: [1, 0.95, 0.9] }));
@@ -492,7 +530,7 @@ export function createCharacterModel(def, { pod: withPod = true } = {}) {
   body.add(stars);
 
   // acessório equipado (cosmético): preso à cabeça
-  const accTick = addAccessory(head, def.acc, def.anch || {}, part);
+  const accTick = addAccessory(head, def.acc, anch, part);
   if (accTick) {
     const base = extras.tick;
     extras.tick = (t) => {
@@ -501,7 +539,7 @@ export function createCharacterModel(def, { pod: withPod = true } = {}) {
     };
   }
 
-  return { def, hasPod: withPod, root, tilt, pod, body, head, eyes, pupils, brows, mouth, arms: armPivots, mats, glow, stars, lamps, extras };
+  return { def, hasPod: withPod, root, tilt, pod, body, head, fig, eyes, pupils, brows, mouth, arms: armPivots, mats, glow, stars, lamps, extras };
 }
 
 /** Constrói o acessório `id` na cabeça. Devolve um tick opcional de animação. */
@@ -718,6 +756,14 @@ export class CharacterAnimator {
         arm.rotation.z = lerp(rest[1], s * 0.12, a);
       }
       m.mouth.rotation.z = this.hurt > 0.05 || this.mode === 'out' ? 0 : m.extras.mouthRest ?? Math.PI;
+    }
+
+    // malha esculpida: o corpo inteiro reage (olha para a bola, dá o bote, treme no dano)
+    if (m.fig) {
+      const victory = this.mode === 'victory';
+      m.fig.rotation.y = victory ? 0 : this.look * 0.5 + this.spin;
+      m.fig.rotation.x = victory ? 0 : a * 0.3;
+      if (this.hurt > 0.05) m.fig.rotation.z += Math.sin(t * 34) * 0.07 * this.hurt;
     }
 
     // flash de cor (dano, super)

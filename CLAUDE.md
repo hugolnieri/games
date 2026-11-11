@@ -1,8 +1,10 @@
 # TRETA PARTY — contexto do projeto
 
-Party game web 3D, jogável no navegador, inspirado na **estrutura** dos minigames de Crash Bash (Ballistix), com identidade 100% original. Nada de personagens, nomes, logos, sons ou texturas de Crash, Naughty Dog ou Activision. Tudo (modelos, texturas, áudio) é procedural: não há assets externos.
+Party game web 3D, jogável no navegador, para até 4 jogadores (solo com bots ou sala online). As **famílias de mecânica** vêm dos party games de arena clássicos; a identidade é 100% original. Nada de personagens, nomes, logos, sons ou texturas de Crash, Naughty Dog ou Activision. Modelos, texturas de jogo e áudio são procedurais. A única arte externa é a de apoio dos menus (cartões dos minigames e arte-chave), gerada no Higgsfield e guardada em `src/assets/art/*.webp` (ver `docs/direcao-visual-higgsfield.md`).
 
-- **Minigame 01: Bolada!** 4 jogadores (1 humano + até 3 bots), cada um defende um gol na borda de uma arena circular.
+- **8 minigames** (`src/minigames/index.js`): 01 Bolada! (rebater bolas), 02 Trombada (empurrar para fora), 03 Pula-Pinta (pogo que pinta o piso + cofre), 04 Caixote! (pegar e arremessar), 05 Lata-Velha (tanques, cobertura, minas), 06 Pé na Tábua (corrida de 5 voltas com atalho), 07 Mira Certa (alvos móveis), 08 Pega-Ficha (coletar desviando).
+- **Circuito:** sequência de minigames (escolhida ou sorteada) valendo 5/3/2/1 pontos por rodada; anuncia o campeão. Funciona solo e na sala online (todos seguem na mesma sala entre as rodadas).
+- **Elenco fixo de 6** (Faísca, Broto, Parafuso, Glub, Jujuba, Pipoca) usado em todos os modos, na sala, na loja e nos resultados. **Loja** de cosméticos (skins, acessórios, poses de vitória) com moedas ganhas ao concluir partidas; tudo salvo em localStorage.
 - UI e textos em **português do Brasil**.
 - Stack: **Vite 5 + Three.js 0.170**, JS puro (ES modules), sem framework de UI.
 - Prioridade do dono do projeto: gameplay > controles > física > bots > câmera > feedback > UI > polimento > áudio.
@@ -12,7 +14,8 @@ Party game web 3D, jogável no navegador, inspirado na **estrutura** dos minigam
 ```
 npm install
 npm run dev            # desenvolvimento
-npm run test:sim       # partidas headless só de bots (valida física, regras, balanceamento)
+npm run test:sim       # partidas headless só de bots: Bolada (test/sim.test.mjs) + os 7 de arena (test/minigames.test.mjs)
+node tools/art.mjs art-src   # otimiza arte gerada (PNG → WebP) e reescreve src/assets/art.js
 npm run build          # build normal (dist/)
 npm run build:single   # HTML único com tudo inline (dist-single/), abre direto do disco (file://)
 ```
@@ -21,7 +24,9 @@ npm run build:single   # HTML único com tudo inline (dist-single/), abre direto
 
 **Tudo roda no navegador** (Chromium testado em 1280x720, 390x844 retrato com toque e 844x390 paisagem com toque), sem erros de console. O fluxo completo funciona: menu com demo ao vivo → setup → contagem → partida → pausa (Esc/Start/aba oculta) → resultado → jogar novamente / menu. O `build:single` também abre e roda via `file://`.
 
-`npm run test:sim` passa os 6 critérios (N=80):
+`test/minigames.test.mjs` (N=40 por cenário, `ONLY=trombada,caixote` filtra) verifica para cada minigame de arena: toda partida termina, colocações 1..n sem repetição, difícil vence a maioria contra 3 fáceis, normal vence fácil no 1v1, jogador parado (quase) nunca vence, duração entre 20s e 150s.
+
+O Bolada (`test/sim.test.mjs`) passa os 6 critérios (N=80):
 - Difícil vence 78/80 contra três Fáceis.
 - No 1v1, Difícil vence ~74% contra Normal, e Normal vence 80/80 contra Fácil.
 - Jogador parado nunca vence.
@@ -54,11 +59,22 @@ src/
     GameManager.js     máquina de estados: menu (demo ao vivo no fundo) → countdown → playing ⇄ paused → result; refit() aplica meta.camera; navegação de menu por controle
     GameState.js       settings + lastConfig em localStorage ('treta-party:v1')
   characters/
-    characters.js      4 personagens originais (Faísca, Broto, Parafuso, Glub)
-    CharacterModel.js  modelo por primitivas dentro de um pod voador + CharacterAnimator (idle, lean, olhar, ataque, dano, vitória)
-    portraits.js       renderiza retratos em canvas offscreen → dataURL (usados na UI); fallback SVG se o WebGL falhar
+    characters.js      ELENCO: 6 personagens originais + lookDef(p) (personagem + skin + acessório + pose) e lookOf(p)
+    cosmetics.js       CATÁLOGO da loja: SKINS por personagem, ACCESSORIES, POSES, preços, matchReward()
+    CharacterModel.js  modelo por primitivas (pod opcional) + acessórios na cabeça + CharacterAnimator (idle, lean, olhar, ataque, dano, 5 poses de vitória)
+    rigs.js            veículo por minigame (bumper, pogo, feet, tank, kart, board, blaster) + createAvatar(player, rig)
+    portraits.js       Portraits: estúdio offscreen com cache; of(look) e poseFrames(look) (prévia animada da loja); fallback SVG
+  assets/
+    art.js             GERADO por tools/art.mjs: ART.minigames[id], ART.key (WebP em assets/art/)
   minigames/
-    index.js           REGISTRO: MINIGAMES = [BoladaMinigame]; COMING_SOON
+    index.js           REGISTRO: MINIGAMES (8), getMinigame, hasMinigame, CIRCUIT_POINTS
+    meta.js            peças comuns de metadados (teclas, howTo)
+    shared/
+      SimBase.js         base das sims de arena (estado em `this.s`, JSON puro) + BotBase + separate/pushOutBox; roda em Node
+      ArenaView.js       base das views: avatares, objetos por id, interpolação, fim de partida, helpers (tmesh, flat, platform)
+      ArenaMinigame.js   cola genérica: passo fixo 1/60, input local/remoto, bots, snapshot de rede, HUD e resultados
+    trombada/ pulapinta/ caixote/ latavelha/ penatabua/ miracerta/ pegaficha/
+                       cada um: sim.js (Sim + Bot + constantes, sem Three.js) e game.js (View + classe com static meta)
     bolada/
       config.js        todo o tuning (velocidades, pulso, bolas, spawn)
       BoladaSim.js     simulação 2D pura, SEM Three.js; roda em Node
@@ -68,9 +84,11 @@ src/
       BoladaMinigame.js  cola: passo fixo, input humano, bots, hitstop/câmera lenta/acelerar
     _modelo/           molde mínimo e funcional de minigame (NÃO registrado): copiar para criar o 02
   ui/
-    UI.js              telas DOM: main, setup, howto, settings, pause, result; moveFocus()/activate() (navegação espacial por setas/controle)
-    HUD.js             painéis por jogador, cronômetro, rótulos 3D, floatText, banner, countdown, toque; topReserve(w, h) espelha os breakpoints do CSS
-test/sim.test.mjs
+    UI.js              telas DOM: main, setup (modo + grade de minigames + elenco), shop, howto, settings, pause, online, lobby, result (rodada, circuito, campeão); moveFocus()/activate()
+    HUD.js             painéis por jogador, cronômetro, rótulos 3D, floatText, banner, countdown, regras rápidas, toque (◀ ▶ ou direcional analógico por meta.touch); topReserve(w, h) espelha os breakpoints do CSS
+test/sim.test.mjs, test/minigames.test.mjs
+tools/art.mjs         PNG gerado → WebP otimizado + src/assets/art.js
+docs/direcao-visual-higgsfield.md   prompts por personagem e arena, e como integrar
 ```
 
 ### Fluxo de dados (Bolada)
@@ -106,6 +124,27 @@ test/sim.test.mjs
 - **Resultado:** `getResults()` devolve `summary: [{ label, value }]`, que vira as colunas da tela de resultado (a UI não conhece estatísticas de nenhum minigame).
 - **Visual das bolas:** `BALL_VIS` (BoladaView) desenha as bolas 12% maiores que o raio de colisão; rastro na cor de quem rebateu por último; anel de alcance do pulso só para humanos.
 
+## Minigames de arena (02 a 08)
+
+Todos seguem o mesmo molde (`shared/`), o que deixa cada modo em ~2 arquivos:
+
+- **Sim** (`extends SimBase`): todo o estado mutável fica em `this.s` (JSON puro): `s.p[i]` jogadores `{ x, z, d, on, sc, pl, ab/bb (toques em buffer), inv, stun, ... }`, `s.o` objetos `{ id, k, x, z, ... }`. `tick(h, inputs)` recebe `inputs[i] = { x, z, a, b }` (vetor no mundo + toques). `eliminate(p)`, `finish()` e `rankKey(p)` cuidam de colocação e desempate; `summary(p)`, `detail(p)`, `hudPoints(p)`, `hudText(p)` alimentam HUD e resultado.
+- **Bot** (`extends BotBase`): `think(h, fresh)` preenche `this.out`; `lv(fácil, normal, difícil)` escolhe parâmetros. Mesma física do humano.
+- **View** (`extends ArenaView`): `static rig`, `build()`, `makeObj(o)`, `syncObj(...)`, `syncPlayer(av, p, x, z, dt)`, `onEvent(e)`, `frame(dt)`.
+- **Classe** (`extends ArenaMinigame`): `static Sim/Bot/View` e `static meta` com `keys`, `touch: { a, b }`, `quick` (3 regras mostradas na contagem), `hud: { pips }`, `camera`, `howTo`.
+- **Rede sem código extra:** host manda `{ st: sim.snapshot(), e: eventos }`; cliente faz `sim.apply(st)`. Regra nova = campo novo em `s` + evento; nada a serializar à mão.
+- **Controles iguais em todos:** direcional (teclado WASD/setas, analógico, direcional de toque), A = Espaço, B = Shift. Câmera sem giro por jogador; o anel branco no chão marca "você" e muda de cor quando a habilidade está pronta.
+
+Pistas de leitura obrigatórias: Caixote! mostra a faixa de mira piscando durante a preparação do arremesso (0,5s) e o anel onde o caixote cai; Lata-Velha mostra a recarga num disco sob o tanque e as minas piscam (lento = armando, rápido + círculo = vai explodir); Pega-Ficha avisa a marreta com círculo que enche; Pé na Tábua marca o trilho do pêndulo na ponte.
+
+## Sessão, Circuito, loja
+
+- `GameManager.session = { ids, idx, players, circuit, totals, wins, last, points, time, net, matchId, scored }`. `startMatch()` (solo) e `OnlineSession._begin()` (online) chamam `startSession()`; `_playRound()` monta a rodada; `nextRound()` avança. Os `players` (com aparência) são os mesmos em todas as rodadas.
+- Resultado: `_showResult()` paga a recompensa (`state.reward(chave, moedas)`, idempotente por `matchId:rodada`), soma `CIRCUIT_POINTS` e monta a classificação (pontos → vitórias de rodada → colocação na última).
+- `GameState.profile = { coins, owned, skins: { personagem: skin }, acc, pose, rewarded }`. `buy(id)` nunca cobra item já possuído; `equip(id)`; `look(characterId)` devolve `{ characterId, skin, acc, pose }` só com itens possuídos.
+- Aparência nas partidas: `player = { characterId, skin, acc, pose, isHuman, isRemote, difficulty }`. `p.def` (personagem base) dá nome e **cor do jogador** (HUD, veículo, território); `lookDef(p)` dá as cores do corpo com a skin.
+- No Circuito o Bolada roda com 5 pontos e 2:00 para ter duração parecida com os outros.
+
 ## Online (PeerJS / WebRTC)
 
 - `net/Net.js` cria e entra em salas (id do peer = `treta-party-v1-<CÓDIGO>`, código de 4 caracteres) usando o servidor público do PeerJS e STUN do Google/Twilio (não há TURN). Com `?peer=host:porta` usa um PeerServer local (`npx peerjs --port 9000 --host 127.0.0.1`).
@@ -114,6 +153,8 @@ test/sim.test.mjs
 - Jogadores: `isHuman` = quem está nesta máquina ("você"); `isRemote` = humano em outra máquina; nenhum dos dois = bot. Se um cliente sair, `dropRemote()` põe um bot no lugar.
 - Cada máquina gira a câmera (`rig.yaw = mg.getViewYaw()`) para o próprio gol ficar embaixo. O input de tela é projetado com esse giro em `_controllerInput`, e o HUD põe os painéis por assento relativo (`viewSeat`).
 - Pausa online = sobreposição (`gm.overlay`): o jogo não para e o seu pod fica parado enquanto o menu está aberto.
+- Lobby: `members[i].look`; o host escolhe modo, minigame ou sequência do circuito (`setOptions`), bots e dificuldade. Personagem não se repete na sala (`_freeLook`). Aparência que chega pela rede passa por `cleanLook`.
+- `start{ plan, you, ids, idx, circuit, id, totals, wins, last }`: mesma mensagem para partida única, revanche e próxima rodada (`startGame`, `nextRound`, `restartRound` → `_launch`). Quem sai no meio do circuito vira bot nas rodadas seguintes.
 - Teste com dois navegadores (Playwright, dois contextos) + PeerServer local.
 
 ## Mecânica (resumo)
@@ -180,11 +221,11 @@ test/sim.test.mjs
 
 ## Próximos passos sugeridos
 
-- Jogar de verdade com teclado e controle em várias máquinas e revisar a sensação: velocidade do pod, janela da super (`superGap` 0.45 ≈ ±45ms a 10 u/s) e volume da trilha.
-- Desempenho em celulares fracos: hoje são ~460 draw calls, a maior parte vinda dos personagens (malhas + contornos). Mesclar as geometrias estáticas por material se for preciso.
-- Multiplayer local: `Input.getPlayer(slot)` já existe. Falta mapear um dispositivo por slot e permitir mais de um humano no setup (os controladores por humano de `BoladaMinigame` já suportam vários).
-- Online: adicionar um servidor TURN para redes que bloqueiam conexão direta; predição local do próprio pod no cliente se a latência incomodar.
-- Minigame 02 a partir de `src/minigames/_modelo/`.
+- Jogar de verdade em aparelhos e redes reais: iPhone/Safari (direcional de toque, volta à sala após compartilhar convite), latência entre redes diferentes, celulares fracos.
+- Balanceamento fino com humanos: letalidade de Caixote! e Lata-Velha, vantagem de largada em Pé na Tábua, preço dos itens.
+- Online: servidor TURN para redes que bloqueiam conexão direta; predição local do próprio jogador no cliente se a latência incomodar; o estado dos modos de arena vai como JSON a 30 Hz (enxuto, mas dá para compactar).
+- Multiplayer local: `Input.getPlayer(slot)` já existe; falta mapear um dispositivo por slot.
+- Mais conteúdo: novas pistas/arenas por modo, mais skins; clipes curtos de apresentação (Higgsfield vídeo) se couber no carregamento.
 
 ## Pontos de atenção conhecidos
 
@@ -194,9 +235,9 @@ test/sim.test.mjs
 - A demo do menu usa bots e `demo: true` (sem som, sem HUD, sem mexer na câmera). Quando acaba, `GameManager` reinicia outra.
 - `BoladaView` pede `mg.hitstop`/`mg.slowmo`: qualquer minigame novo que reutilize a ideia deve expor o mesmo.
 
-## Como adicionar o Minigame 02
+## Como adicionar um minigame
 
-1. Copiar `src/minigames/_modelo/` para `src/minigames/<nome>/`. A classe estende `game/Minigame.js` e traz `static meta` (id, number, name, tagline, min/maxPlayers, camera, howTo com diagram/gamepad opcionais).
-2. Reaproveitar `engine/*`, `characters/*` e o contrato de HUD (`getHud`, `getLabels`) e de resultado (`getResults` com `summary`).
-3. Registrar em `src/minigames/index.js`. O setup já lista os minigames como botões (`data-key="minigameId"`), e o menu, o "Como jogar" e a demo seguem o minigame escolhido.
-4. Ideal: separar sim pura + bot + view como no Bolada, e escrever um `test/<nome>.test.mjs` headless.
+1. Copiar uma pasta de arena (ex.: `src/minigames/pegaficha/`): `sim.js` (Sim + Bot) e `game.js` (View + classe com `static meta`). Para algo fora do molde, estender `game/Minigame.js` direto (ver `_modelo/` e `bolada/`).
+2. Registrar em `src/minigames/index.js` e acrescentar em `test/minigames.test.mjs`.
+3. Menu, "Como jogar", HUD, toque, sala online, Circuito e resultados se adaptam sozinhos.
+4. Opcional: arte do cartão em `art-src/<id>.png` + `node tools/art.mjs art-src`.

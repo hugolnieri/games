@@ -38,7 +38,7 @@ export class CaixoteSim extends SimBase {
     for (let k = 0; k < 12; k++) {
       const x = this.rand(-C.half + 1.2, C.half - 1.2), z = this.rand(-C.half + 1.2, C.half - 1.2);
       if (this.s.p.some((p) => p.on && Math.hypot(p.x - x, p.z - z) < 1.6) || this.s.o.some((o) => Math.hypot(o.x - x, o.z - z) < 1.4)) continue;
-      return this.add({ k: this.rng() < 0.16 ? 't' : 'c', st: 0, x, z, vx: 0, vz: 0, w, own: -1, fu: 0, ds: 0 });
+      return this.add({ k: this.s.t > 10 && this.rng() < 0.18 ? 't' : 'c', st: 0, x, z, vx: 0, vz: 0, w, own: -1, fu: 0, ds: 0 });
     }
     return null;
   }

@@ -121,7 +121,9 @@ export class MiraCertaBot extends BotBase {
           X = g.x + g.vx * (fly(g) + tm + 0.05);
         }
         if (Math.abs(X) > M.xmax) continue;
-        const sc = Math.abs(g.v) / (tm + 0.45) + this.rng() * this.lv(1.5, 0.4, 0.05);
+        let sc = Math.abs(g.v) / (tm + 0.45) + this.rng() * this.lv(1.5, 0.4, 0.05);
+        // não disputa o mesmo ponto do balcão com quem já está lá
+        if (this.others().some((p) => Math.abs(p.x - X) < 1.3 && Math.abs(p.x - X) < Math.abs(me.x - X))) sc *= 0.45;
         if (sc > bs) {
           bs = sc;
           best = g;

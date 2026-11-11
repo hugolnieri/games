@@ -2417,3 +2417,51 @@ kbd {
     font-size: 16px;
   }
 }
+@media (max-width: 520px) {
+  .tbtn--dash {
+    font-size: 11px;
+  }
+}
+/* arte-chave (Higgsfield) como faixa no topo de painéis */
+.panel-banner {
+  display: block;
+  width: 100%;
+  height: clamp(84px, 16vh, 150px);
+  margin-bottom: 12px;
+  object-fit: cover;
+  object-position: 50% 32%;
+  border: var(--bw) solid var(--ink);
+  border-radius: 18px;
+}
+@media (max-height: 500px) {
+  .panel-banner {
+    display: none;
+  }
+}
+.mg-card.has-art::before {
+  -webkit-mask-image: linear-gradient(90deg, transparent 44%, #000 92%);
+  mask-image: linear-gradient(90deg, transparent 44%, #000 92%);
+}
+.mg-card.has-art > * {
+  max-width: 60%;
+}
+.panel-banner {
+  object-position: 50% 14%;
+}
+@media (max-width: 760px) {
+  .mg-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .mg-card,
+  button.mg-card {
+    min-height: 62px;
+    padding: 6px 10px 7px;
+  }
+  .mg-card b {
+    font-size: 15px;
+  }
+  .mg-card.has-art > * {
+    max-width: 70%;
+  }
+}

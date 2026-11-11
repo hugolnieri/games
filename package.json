@@ -8,7 +8,7 @@
     "build": "vite build",
     "build:single": "vite build --mode single",
     "preview": "vite preview",
-    "test:sim": "node test/sim.test.mjs"
+    "test:sim": "node test/sim.test.mjs && node test/minigames.test.mjs"
   },
   "dependencies": {
     "peerjs": "^1.5.5",

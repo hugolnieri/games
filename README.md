@@ -2,9 +2,26 @@
 
 Party game 3D que roda direto no navegador. As partidas são curtas e caóticas, dá para jogar sozinho contra bots e o jogo funciona com teclado, controle ou toque.
 
-**Minigame 01: Bolada!** Cada jogador defende um gol na borda de uma arena circular flutuante. O reator do centro dispara bolas que ricocheteiam por tudo. Rebata as bolas para o gol dos adversários e não deixe nenhuma entrar no seu.
+São **8 minigames** para até 4 jogadores, um **Circuito** que encadeia vários deles e anuncia um campeão, um **elenco fixo de 6 personagens** e uma **loja** de cosméticos.
 
-A estrutura se inspira nos minigames de party games clássicos, mas tudo aqui é original: personagens, arena, interface, sons e música. Não há nenhum arquivo externo de modelo, textura ou áudio. Os modelos são montados com primitivas, as texturas saem de canvas e o som é sintetizado em tempo real.
+| # | Minigame | O que é |
+| - | -------- | ------- |
+| 01 | **Bolada!** | Defenda seu gol na borda da arena e rebata as bolas para o gol dos outros. |
+| 02 | **Trombada** | Bate-bate numa plataforma lisa que encolhe: empurre todo mundo para fora. |
+| 03 | **Pula-Pinta** | Pule de casa em casa pintando o piso e corra para o cofre, que troca suas casas por pontos. |
+| 04 | **Caixote!** | Pegue caixotes e arremesse nos outros. A faixa no chão avisa a mira; dinamite explode. |
+| 05 | **Lata-Velha** | Tanques de sucata com coberturas, tiros lentos e minas. A torre mira sozinha; você posiciona e desvia. |
+| 06 | **Pé na Tábua** | Corrida de rolimã em 5 voltas, com zonas de impulso, turbo e uma ponte-atalho arriscada. |
+| 07 | **Mira Certa** | Tiro ao alvo em três esteiras: longe e pequeno vale mais; bomba tira pontos. |
+| 08 | **Pega-Ficha** | Colete fichas pulando as barras giratórias e fugindo da marreta. |
+
+Cada modo mostra as regras rápidas na contagem, tem controles de teclado, controle e toque, bots em três dificuldades, placar, desempate e revanche, e funciona solo e nas salas online.
+
+**Circuito:** em *JOGAR → Circuito* (ou na sala online, pelo anfitrião) escolha de 2 a 8 minigames na ordem das rodadas, ou clique em SORTEAR. Cada rodada vale 5, 3, 2 e 1 pontos; no fim sai o campeão.
+
+**Elenco e loja:** Faísca, Broto, Parafuso, Glub, Jujuba e Pipoca jogam todos os modos, cada um no veículo da rodada (pod, bate-bate, pogo, botas, tanque, kart, prancha). Você ganha moedas ao terminar partidas e gasta em skins, acessórios e poses de vitória, que aparecem nas partidas, na sala e nos resultados. É tudo visual, e fica salvo neste navegador (não há contas).
+
+As famílias de mecânica vêm dos party games de arena clássicos, mas tudo aqui é original: personagens, arenas, interface, sons e música. Os modelos são montados com primitivas, as texturas de jogo saem de canvas e o som é sintetizado em tempo real. A arte dos cartões de minigame e a arte-chave dos menus foram geradas no Higgsfield (prompts em [`docs/direcao-visual-higgsfield.md`](docs/direcao-visual-higgsfield.md)).
 
 ---
 
@@ -31,7 +48,7 @@ Outros comandos:
 | `npm run build`        | Build para hospedar em `dist/` (qualquer servidor estático serve).                                 |
 | `npm run build:single` | Gera **um único** `dist-single/index.html` com tudo embutido. Dá para abrir com dois cliques, sem servidor. |
 | `npm run preview`      | Serve o build de `dist/` localmente.                                                               |
-| `npm run test:sim`     | Roda centenas de partidas só de bots, sem gráficos, e confere física, regras e balanceamento.      |
+| `npm run test:sim`     | Roda centenas de partidas só de bots em todos os minigames, sem gráficos, e confere regras e balanceamento. |
 
 > As fontes (Titan One e Baloo 2) vêm do Google Fonts. Sem internet, o jogo funciona igual e só troca a fonte por uma do sistema.
 
@@ -42,9 +59,9 @@ Outros comandos:
 1. Os dois abrem o jogo (o mesmo `index.html` do `build:single` ou o mesmo site) e clicam em **JOGAR ONLINE**.
 2. Um clica em **CRIAR SALA** e recebe um código de 4 letras (ex.: `JQ9G`).
 3. O outro digita o código em **Entrar numa sala** e clica em **ENTRAR**.
-4. Na sala, cada um escolhe o personagem. O anfitrião define bots, pontos, tempo e dificuldade, e clica em **COMEÇAR**.
+4. Na sala, cada um escolhe o personagem (a skin equipada vai junto). O anfitrião escolhe o minigame ou monta um Circuito, define bots e dificuldade, e clica em **COMEÇAR**. Entre as rodadas e depois da partida todo mundo continua na mesma sala.
 
-Cabem até 4 pessoas por sala, e as vagas que sobram podem ser completadas com bots. Cada jogador vê a arena girada com o próprio gol embaixo.
+Cabem até 4 pessoas por sala, e as vagas que sobram podem ser completadas com bots. O anfitrião também pode mandar um link de convite que já entra direto na sala.
 
 Como funciona: a conexão é direta entre os navegadores (WebRTC, via [PeerJS](https://peerjs.com)). O servidor público gratuito do PeerJS só serve para os dois se encontrarem. Quem cria a sala roda a partida e manda o estado ~30 vezes por segundo. O amigo manda só os comandos. Por isso vale deixar quem tem a melhor internet ou o melhor computador como anfitrião.
 

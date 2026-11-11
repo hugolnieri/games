@@ -29,6 +29,7 @@ class PeNaTabuaView extends ArenaView {
   static rig = 'kart';
 
   build() {
+    for (const av of this.av) av.root.scale.setScalar(1.25); // karts um pouco maiores que a colisão: leitura
     const road = new THREE.Mesh(ribbon(R.hw, 0), toon(0x5a4f9a, { side: THREE.DoubleSide }));
     const under = new THREE.Mesh(ribbon(R.hw + 0.3, -0.12), toon(0x2a1c5a, { side: THREE.DoubleSide }));
     this.root.add(road, under);
@@ -67,7 +68,7 @@ class PeNaTabuaView extends ArenaView {
     line.position.set(st.x, 0.03, st.z);
     line.rotation.y = -Math.atan2(st.tz, st.tx);
     this.root.add(line);
-    const arch = tmesh(new THREE.TorusGeometry(R.hw + 0.3, 0.14, 8, 20, Math.PI), 0xffd23f, { pos: [st.x, 0, st.z], outline: 1.3 });
+    const arch = tmesh(new THREE.TorusGeometry(R.hw + 0.3, 0.14, 8, 20, Math.PI), 0xffd23f, { pos: [st.x, 0, st.z], outline: 0 });
     arch.rotation.y = -Math.atan2(st.tz, st.tx) + Math.PI / 2;
     this.root.add(arch);
     // ponte do atalho + pêndulo

@@ -75,7 +75,11 @@ export class HUD {
       const t = b.dataset.t;
       b.addEventListener('pointerdown', (e) => {
         e.preventDefault();
-        b.setPointerCapture?.(e.pointerId);
+        try {
+          b.setPointerCapture?.(e.pointerId);
+        } catch {
+          /* ponteiro já solto */
+        }
         b.classList.add('on');
         if (t in held) {
           held[t] = true;
@@ -120,7 +124,11 @@ export class HUD {
     stick.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       pid = e.pointerId;
-      stick.setPointerCapture?.(pid);
+      try {
+        stick.setPointerCapture?.(pid);
+      } catch {
+        /* ponteiro sintético ou já solto */
+      }
       stick.classList.add('on');
       move(e);
     });

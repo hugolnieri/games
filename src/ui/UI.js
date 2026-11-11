@@ -71,7 +71,7 @@ export class UI {
       return;
     }
     if (a === 'pick-mode' || a === 'pick-mg' || a === 'seq-random' || a === 'seq-clear') return this._pick(a, b);
-    if (a.startsWith('shop-')) return this._shop(a, b.dataset);
+    if (a.startsWith('shop-')) return this._shopAct(a, b.dataset);
     if (a === 'howto-mg') {
       this.howtoId = b.dataset.value;
       this.audio.play('ui');
@@ -220,7 +220,7 @@ export class UI {
   }
 
   /** Loja: compra e equipa direto no perfil salvo (GameState). */
-  _shop(a, d) {
+  _shopAct(a, d) {
     const st = this.state;
     let sel = `[data-id="${d.id}"]`;
     if (a === 'shop-char') {
@@ -554,6 +554,7 @@ export class UI {
           <span class="wallet" aria-label="Saldo: ${pr.coins} moedas">${coin(pr.coins)}</span>
           <button class="btn btn--ghost" data-action="back" data-autofocus>Voltar</button>
         </header>
+        ${ART.key ? `<img class="panel-banner" src="${ART.key}" alt="">` : ''}
         <p class="lead-sm">Tudo aqui é só visual. Você ganha moedas terminando partidas (mais para quem chega na frente) e o que equipar aparece em todos os minigames, na sala e nos resultados.</p>
         <div class="shop-top">
           <div class="shop-me" style="--c:${hexToCss(ch.color)}">${this._face(look, 160)}<b>${esc(ch.name)}</b></div>
@@ -577,6 +578,7 @@ export class UI {
           <h2 id="online-title">Jogar online</h2>
           <button class="btn btn--ghost" data-action="back">Voltar</button>
         </header>
+        ${ART.key ? `<img class="panel-banner" src="${ART.key}" alt="">` : ''}
         <p class="lead-sm">Um cria a sala e passa o código de 4 letras; o outro digita o código. Até 4 pessoas, e dá para completar com bots.</p>
         ${error ? `<p class="net-msg net-msg--error" role="alert">${esc(error)}</p>` : ''}
         ${busy ? `<p class="net-msg" role="status">${esc(busy)}</p>` : ''}

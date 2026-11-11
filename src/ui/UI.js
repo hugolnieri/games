@@ -378,6 +378,20 @@ export class UI {
     }).join('');
   }
 
+  /** Ficha do personagem escolhido: arte, temperamento e bordão. */
+  _ficha(id) {
+    const ch = getCharacter(id), art = ART.chars?.[ch.id];
+    return `
+      <div class="ficha" style="--c:${hexToCss(ch.color)}">
+        ${art ? `<img class="ficha-art" src="${art}" alt="" width="200" height="200">` : this._face(this.state.look(ch.id), 120)}
+        <div class="ficha-text">
+          <b>${esc(ch.name)}</b><span class="ficha-sp">${esc(ch.species)}</span>
+          <p>${esc(ch.bio)}</p>
+          <p class="ficha-quote">“${esc(ch.quote)}”</p>
+        </div>
+      </div>`;
+  }
+
   _setup() {
     const c = this.state.lastConfig;
     const diff = DIFFICULTY.find((d) => d[0] === c.difficulty) || DIFFICULTY[1];
@@ -396,6 +410,7 @@ export class UI {
         <div class="field">
           <h3>Seu personagem <button class="link" data-action="shop">trocar visual na loja</button></h3>
           <div class="char-grid" data-group>${this._charGrid('set', c.characterId)}</div>
+          ${this._ficha(c.characterId)}
         </div>
         <div class="field-grid">
           <div class="field">
@@ -556,6 +571,7 @@ export class UI {
         </header>
         ${ART.key ? `<img class="panel-banner" src="${ART.key}" alt="">` : ''}
         <p class="lead-sm">Tudo aqui é só visual. Você ganha moedas terminando partidas (mais para quem chega na frente) e o que equipar aparece em todos os minigames, na sala e nos resultados.</p>
+        ${this._ficha(ch.id)}
         <div class="shop-top">
           <div class="shop-me" style="--c:${hexToCss(ch.color)}">${this._face(look, 160)}<b>${esc(ch.name)}</b></div>
           <div class="field">
@@ -709,6 +725,9 @@ export class UI {
     const sub = final
       ? humanWon ? 'Você é o campeão do circuito!' : `${esc(w.name)} levou o circuito com ${w.total} pontos.`
       : humanWon ? 'Você levou essa!' : circuit ? 'Ainda dá para virar no circuito.' : 'Não foi dessa vez. Revanche?';
+    // quem ganhou comemora do seu jeito; se você perdeu, o seu personagem também tem o que dizer
+    const me = results.find((r) => r.isHuman);
+    const sore = me && !humanWon ? getCharacter(me.characterId) : null;
     return `
     <section class="screen screen--result">
       <div class="panel panel--result" role="dialog" aria-labelledby="result-title">
@@ -718,8 +737,10 @@ export class UI {
           <div>
             <h2 id="result-title">${esc(w.name)}</h2>
             <p>${sub}</p>
+            <p class="say">“${esc(wdef.win)}”</p>
           </div>
         </div>
+        ${sore ? `<p class="say say--lose" style="--c:${hexToCss(sore.color)}">${esc(sore.name)}: “${esc(sore.lose)}”</p>` : ''}
         ${final ? table : ''}
         ${final ? `<h3 class="round-title">Última rodada: ${esc(meta.name)}</h3>` : ''}
         <ol class="ranking">${rows}</ol>

@@ -178,7 +178,7 @@ export class ArenaView {
     const pos = av.root.position;
     this.ctx.rig.setOrbit({ center: new THREE.Vector3(pos.x, 0, pos.z), radius: 6.5, height: 3.4, speed: 0.45, lookY: 0.9, lambda: 2.2 });
     this.sfx('victory');
-    this.hud.banner(this.players[e.w].isHuman ? 'Você venceu!' : `${this.players[e.w].def.name} venceu!`, { color: this.color(e.w), duration: 2.8 });
+    this.hud.banner(this.players[e.w].isHuman ? 'Você venceu!' : `${this.players[e.w].def.name} venceu!`, { color: this.color(e.w), sub: `“${this.players[e.w].def.win}”`, duration: 2.8 });
   }
 
   update(dt, scale, alpha) {

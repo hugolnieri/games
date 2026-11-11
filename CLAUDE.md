@@ -65,7 +65,7 @@ src/
     rigs.js            veículo por minigame (bumper, pogo, feet, tank, kart, board, blaster) + createAvatar(player, rig)
     portraits.js       Portraits: estúdio offscreen com cache; of(look) e poseFrames(look) (prévia animada da loja); fallback SVG
   assets/
-    art.js             GERADO por tools/art.mjs: ART.minigames[id], ART.key (WebP em assets/art/)
+    art.js             GERADO por tools/art.mjs: ART.minigames[id], ART.chars[id], ART.key (WebP em assets/art/)
   minigames/
     index.js           REGISTRO: MINIGAMES (8), getMinigame, hasMinigame, CIRCUIT_POINTS
     meta.js            peças comuns de metadados (teclas, howTo)
@@ -136,6 +136,24 @@ Todos seguem o mesmo molde (`shared/`), o que deixa cada modo em ~2 arquivos:
 - **Controles iguais em todos:** direcional (teclado WASD/setas, analógico, direcional de toque), A = Espaço, B = Shift. Câmera sem giro por jogador; o anel branco no chão marca "você" e muda de cor quando a habilidade está pronta.
 
 Pistas de leitura obrigatórias: Caixote! mostra a faixa de mira piscando durante a preparação do arremesso (0,5s) e o anel onde o caixote cai; Lata-Velha mostra a recarga num disco sob o tanque e as minas piscam (lento = armando, rápido + círculo = vai explodir); Pega-Ficha avisa a marreta com círculo que enche; Pé na Tábua marca o trilho do pêndulo na ponte.
+
+## Elenco: personalidade
+
+Cada personagem tem um temperamento que precisa aparecer em **três lugares**: no modelo 3D (expressão, postura, trejeito), nas falas e na ficha de arte. Ao mexer em um, mantenha os outros coerentes.
+
+| Personagem | Temperamento | Marcas no modelo (`CharacterModel.js`) | Trejeito (`extras.tick` / `extras.armRest`) |
+| --- | --- | --- | --- |
+| Faísca | esquentada, exibida | sobrancelha brava, presinha, óculos de corrida na testa, topete e rabo de raio | rabo inquieto, não para quieta, topete faiscando |
+| Broto | preguiçoso, tranquilo | pálpebras pesadas, sorrisão, junco na boca, brotinho de duas folhas | balança devagar, braços largados, mastiga o junco |
+| Parafuso | ansioso, atrapalhado | olhos de LED desparelhados, boca em zigue-zague, parafusão solto, antena torta, remendo de ferrugem | tique nervoso, mãos tremendo na frente, parafuso desrosqueando |
+| Glub | rabugento, impaciente | três olhos com pálpebra pesada, bico, antenas caídas, gosma escorrendo, bolhas | braços cruzados, cada olho para um lado; só sorri quando ganha |
+| Jujuba | fofa e casca-grossa | orelha mordida, laço, curativo em X, patas enfaixadas | guarda de boxe com jab alternado, piscadela |
+| Pipoca | hiperativa, caótica | olhos esbugalhados de tamanhos diferentes, bico aberto, topete de pipoca, casca de ovo listrada | cabeça aos trancos, asas batendo sem parar, bico piando |
+
+- Sobrancelhas (`addBrow`) reagem ao humor no `CharacterAnimator`: bravas no ataque, caídas no dano, erguidas na vitória. `extras.mouthRest` define a boca em repouso (Glub faz bico).
+- Com chapéu equipado (`hat`), o enfeite do topo da cabeça (topete, broto, parafusão, laço, pipoca) sai para dar lugar ao acessório.
+- Falas em `characters.js`: `bio`, `quote` (bordão), `win` e `lose`. Aparecem na ficha (setup e loja), no banner de vitória e na tela de resultado.
+- Ficha de arte: `ART.chars[id]` (Higgsfield, fundo transparente, `art-src/chars/<id>.png`). Os retratos pequenos continuam sendo o modelo 3D (mostram skin e acessório).
 
 ## Sessão, Circuito, loja
 

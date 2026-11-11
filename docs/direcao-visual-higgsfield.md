@@ -14,20 +14,25 @@ Modelo usado: `gpt_image_2_6` (1k, 16:9). Custo: 0,25 crédito em qualidade `low
 
 ## Elenco (descrição fixa, reaproveitar em skins e poses)
 
-Para manter consistência, envie junto a ficha do elenco renderizada pelo próprio jogo como imagem
-de referência (`role: image_references`). Ela é gerada pelo estúdio de retratos
-(`Portraits.of(id)` em `src/characters/portraits.js`): 6 retratos numa grade 3×2 com os nomes.
+Para manter consistência, envie junto uma imagem de referência (`role: image_references`): a ficha
+3D do jogo (`docs/elenco-referencia.png`, gerada pelo estúdio de retratos) ou as fichas já aprovadas
+em `art-src/chars/`. Cada ficha foi gerada em 1:1, fundo transparente, qualidade `medium`, com:
 
-| Personagem | Descrição para o prompt | Cor |
-| --- | --- | --- |
-| Faísca | small round orange electric cat, pointy ears with pink inside, whiskers, yellow zigzag hair tuft, long curled tail with a yellow ball tip | `#ff6b3d` |
-| Broto | small round green frog-lizard, big eyes on top of its head, wide smile, orange crest spikes down its back, short tail | `#49d35e` |
-| Parafuso | small blue boxy junkyard robot, dark visor with two cyan LED eyes, round ear bolts, antenna with a blinking red bulb, pink heart light on the chest | `#2fb0ff` |
-| Glub | small purple gelatinous alien, three eyes (one big on top), two antennae with lime-green tips, tiny round "o" mouth | `#b46bff` |
-| Jujuba | small pink gummy bear, round ears, cream snout, rosy cheeks, slightly translucent jelly look | `#ff5fa2` |
-| Pipoca | small yellow chick, big orange beak, red three-feather tuft, stubby wings | `#ffc21a` |
+> Character splash art, single character, full body, centered, transparent background. Redesign of
+> the <personagem> from the reference sheet with much more personality: <nome>, <temperamento>.
+> Keep <formas base>. Add: <marcas>. + bloco de estilo.
 
-Todos são baixinhos, sem pernas, de braços curtos, e andam em um veículo da cor deles.
+| Personagem | Temperamento | Formas base | Marcas de personalidade | Cor |
+| --- | --- | --- | --- | --- |
+| Faísca | hot-headed electric speedster cat and shameless show-off | round orange body, cream belly, pointy ears | cocky lopsided smirk with one tiny fang, thick angry eyebrows, yellow racing goggles pushed up on the forehead, spiky yellow lightning-bolt hair tuft, tail shaped like a zigzag lightning bolt, sparks around the paws | `#ff6b3d` |
+| Broto | the laziest, most laid-back swamp frog who wins without trying | round green body, lime belly, big eyes on top of the head, orange crest spikes | heavy half-closed sleepy eyelids, wide relaxed grin, reed straw hanging from the mouth, plant sprout with two leaves on the head, lazy thumbs up | `#49d35e` |
+| Parafuso | anxious, clumsy junkyard robot built from a microwave oven who overthinks everything | blue boxy head with dark visor, cyan LED eyes, cylinder body, pink heart light | mismatched LED eyes, worried eyebrow plates, wobbly zigzag LED mouth, giant loose screw on top of the head, bent antenna with a red bulb, riveted orange rust patch, a spring and bolt popping off | `#2fb0ff` |
+| Glub | grumpy, impatient, sarcastic jelly alien annoyed by everything | round purple gelatinous body, three eyes (one big on top), two antennae with lime-green tips | each eye looking a different way, heavy unimpressed eyelids, one raised eyebrow, small frown, arms crossed, slime drips, drooping antennae, bubbles | `#b46bff` |
+| Jujuba | gummy bear who looks adorable but is the toughest brawler | round pink gummy body, cream snout, rosy cheeks | one ear with a bite taken out, yellow ribbon bow on the other ear, white cross bandage on the cheek, confident wink, boxing tape on both paws, raised fist | `#ff5fa2` |
+| Pipoca | hyperactive, explosive little chick, pure chaotic energy | round yellow body, big orange beak | huge manic eyes with different pupil sizes, beak wide open shouting, head tuft of white popped popcorn with one red feather, lower body inside a cracked eggshell with red and white popcorn-box stripes, wings flapping | `#ffc21a` |
+
+Todos são baixinhos, de braços curtos, e andam em um veículo da cor deles. O modelo 3D jogável
+carrega as mesmas marcas (ver "Elenco: personalidade" no `CLAUDE.md`).
 
 ### Skins (trocar só a paleta do corpo, manter silhueta)
 
@@ -61,7 +66,7 @@ stiff robot dance (Robozinho) · flexing both arms (Exibido).
 
 ## Como integrar
 
-1. Baixe as imagens escolhidas para `art-src/` (fora do build).
+1. Baixe as imagens escolhidas para `art-src/` (fora do build); fichas de personagem em `art-src/chars/<id>.png`.
 2. `node tools/art.mjs art-src` recorta/reduz para WebP em `src/assets/art/` e reescreve
-   `src/assets/art.js` (`ART.minigames[id]`, `ART.key`).
+   `src/assets/art.js` (`ART.minigames[id]`, `ART.chars[id]`, `ART.key`).
 3. Os cartões de minigame (setup e sala) e o "Como jogar" passam a usar a arte automaticamente.

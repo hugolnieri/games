@@ -18,10 +18,15 @@ const CARD = [448, 252, 0.76];
 const browser = await chromium.launch();
 const page = await browser.newPage();
 const names = [];
-for (const f of fs.readdirSync(src).filter((x) => /\.(png|jpe?g|webp)$/i.test(x)).sort()) {
-  const name = path.basename(f, path.extname(f));
+const list = fs.readdirSync(src).filter((x) => /\.(png|jpe?g|webp)$/i.test(x)).sort();
+// art-src/chars/<personagem>.png: ficha do personagem com fundo transparente
+const charDir = path.join(src, 'chars');
+if (fs.existsSync(charDir)) for (const x of fs.readdirSync(charDir).filter((y) => /\.png$/i.test(y)).sort()) list.push('chars/' + x);
+for (const f of list) {
+  const isChar = f.startsWith('chars/');
+  const name = (isChar ? 'char_' : '') + path.basename(f, path.extname(f));
   if (name.includes('-')) continue; // rascunhos (ex.: key-text.png)
-  const [w, h, q] = SIZES[name] || CARD;
+  const [w, h, q] = isChar ? [400, 400, 0.82] : SIZES[name] || CARD;
   const data = 'data:image/png;base64,' + fs.readFileSync(path.join(src, f)).toString('base64');
   const url = await page.evaluate(async ([data, w, h, q]) => {
     const img = new Image();
@@ -48,7 +53,8 @@ ${names.map((n) => `import ${v(n)} from './art/${n}.webp';`).join('\n')}
 
 /** Arte de apoio: cartões dos minigames, arte do menu e do campeão. Os jogáveis são sempre 3D. */
 export const ART = {
-  minigames: { ${names.filter((n) => !special.includes(n)).map((n) => `${n}: ${v(n)}`).join(', ')} },
+  minigames: { ${names.filter((n) => !special.includes(n) && !n.startsWith('char_')).map((n) => `${n}: ${v(n)}`).join(', ')} },
+  chars: { ${names.filter((n) => n.startsWith('char_')).map((n) => `${n.slice(5)}: ${v(n)}`).join(', ')} },
   key: ${names.includes('key') ? v('key') : 'null'},
   vitoria: ${names.includes('vitoria') ? v('vitoria') : 'null'},
 };

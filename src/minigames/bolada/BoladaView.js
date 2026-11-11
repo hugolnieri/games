@@ -350,7 +350,7 @@ export class BoladaView {
     const pos = pv.model.root.position;
     ctx.rig.setOrbit({ center: new THREE.Vector3(pos.x * 0.85, 0, pos.z * 0.85), radius: 6.5, height: 3.4, speed: 0.45, lookY: 0.9, lambda: 2.2 });
     this.sfx('victory');
-    hud.banner(pv.player.isHuman ? 'Você venceu!' : `${pv.player.def.name} venceu!`, { color: pv.player.def.color, duration: 2.8 });
+    hud.banner(pv.player.isHuman ? 'Você venceu!' : `${pv.player.def.name} venceu!`, { color: pv.player.def.color, sub: `“${pv.player.def.win}”`, duration: 2.8 });
   }
 
   // ---------- quadro a quadro ----------

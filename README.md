@@ -19,7 +19,7 @@ Cada modo mostra as regras rápidas na contagem, tem controles de teclado, contr
 
 **Circuito:** em *JOGAR → Circuito* (ou na sala online, pelo anfitrião) escolha de 2 a 8 minigames na ordem das rodadas, ou clique em SORTEAR. Cada rodada vale 5, 3, 2 e 1 pontos; no fim sai o campeão.
 
-**Elenco e loja:** Faísca, Broto, Parafuso, Glub, Jujuba e Pipoca jogam todos os modos, cada um no veículo da rodada (pod, bate-bate, pogo, botas, tanque, kart, prancha). Você ganha moedas ao terminar partidas e gasta em skins, acessórios e poses de vitória, que aparecem nas partidas, na sala e nos resultados. É tudo visual, e fica salvo neste navegador (não há contas).
+**Elenco e loja:** Faísca (esquentada e exibida), Broto (o preguiçoso do brejo), Parafuso (robô ansioso), Glub (alien rabugento), Jujuba (docinho casca-grossa) e Pipoca (energia pura) jogam todos os modos, cada um no veículo da rodada (pod, bate-bate, pogo, botas, tanque, kart, prancha). Você ganha moedas ao terminar partidas e gasta em skins, acessórios e poses de vitória, que aparecem nas partidas, na sala e nos resultados. É tudo visual, e fica salvo neste navegador (não há contas).
 
 As famílias de mecânica vêm dos party games de arena clássicos, mas tudo aqui é original: personagens, arenas, interface, sons e música. Os modelos são montados com primitivas, as texturas de jogo saem de canvas e o som é sintetizado em tempo real. A arte dos cartões de minigame e a arte-chave dos menus foram geradas no Higgsfield (prompts em [`docs/direcao-visual-higgsfield.md`](docs/direcao-visual-higgsfield.md)).
 

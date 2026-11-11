@@ -2465,3 +2465,94 @@ kbd {
     max-width: 70%;
   }
 }
+
+/* ---------- ficha do personagem (arte do Higgsfield + temperamento) ---------- */
+.ficha {
+  --c: var(--candy);
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: 6px 16px;
+  align-items: center;
+  margin-top: 12px;
+  padding: 6px 16px 6px 8px;
+  background: color-mix(in srgb, var(--c) 22%, #fff);
+  border: var(--bw) solid var(--ink);
+  border-radius: 20px;
+  box-shadow: 0 5px 0 var(--ink);
+}
+.ficha img {
+  width: 150px;
+  height: 150px;
+  object-fit: contain;
+}
+.ficha-text b {
+  font-family: var(--f-display);
+  font-weight: 400;
+  font-size: 26px;
+  line-height: 1;
+  margin-right: 10px;
+}
+.ficha-sp {
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.ficha-text p {
+  margin-top: 4px;
+  font-weight: 600;
+  font-size: 15px;
+  line-height: 1.3;
+}
+.ficha-quote,
+.say {
+  font-family: var(--f-display);
+  font-weight: 400;
+  font-size: 17px !important;
+  color: var(--ink);
+}
+.winner .say {
+  margin-top: 4px;
+  font-size: 18px !important;
+}
+.say--lose {
+  --c: var(--candy);
+  margin: 10px 0 0;
+  padding: 4px 12px 3px;
+  font-size: 15px !important;
+  background: color-mix(in srgb, var(--c) 22%, #fff);
+  border: 3px solid var(--ink);
+  border-radius: 12px;
+}
+.panel--shop .shop-me {
+  display: none;
+}
+.panel--shop .shop-top {
+  grid-template-columns: 1fr;
+  margin-top: 12px;
+}
+@media (max-width: 520px) {
+  .ficha {
+    grid-template-columns: 96px minmax(0, 1fr);
+    padding: 4px 10px 4px 4px;
+  }
+  .ficha img {
+    width: 96px;
+    height: 96px;
+  }
+  .ficha-text b {
+    font-size: 20px;
+    display: block;
+  }
+  .ficha-text p {
+    font-size: 13px;
+  }
+  .ficha-quote {
+    font-size: 14px !important;
+  }
+}
+.panel-banner {
+  object-position: 50% 42%;
+  height: clamp(96px, 20vh, 180px);
+}

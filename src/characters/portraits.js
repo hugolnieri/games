@@ -66,9 +66,12 @@ export class Portraits {
       } else {
         m.tilt.position.y = 0.16;
         m.root.rotation.y = 0.28;
+        // pose de repouso e trejeitos do próprio personagem (braços cruzados, guarda de boxe...)
+        m.extras.tick?.(1.3);
         for (const arm of m.arms) {
-          arm.rotation.x = -0.35;
-          arm.rotation.z = arm.userData.side * 0.55;
+          const rest = m.extras.armRest ? m.extras.armRest(arm.userData.side, 1.3) : [-0.35, arm.userData.side * 0.55];
+          arm.rotation.x = rest[0];
+          arm.rotation.z = rest[1];
         }
         st.cam.position.set(0.55, 1.6, 3.35);
         st.cam.lookAt(0, 1.14, 0);

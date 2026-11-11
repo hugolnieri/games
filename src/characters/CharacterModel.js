@@ -124,7 +124,7 @@ export function createCharacterModel(def, { pod: withPod = true } = {}) {
   };
   /** Pálpebra pesada (calota na cor do corpo) sobre um olho criado por addEye. */
   const addLid = (eye, r, amount = 0.45, color = def.color) => {
-    const lid = part(new THREE.SphereGeometry(r * 1.12, 14, 8, 0, Math.PI * 2, 0, Math.PI * amount), color, { outline: 0, rot: [0.3, 0, 0] });
+    const lid = part(new THREE.SphereGeometry(r * 1.12, 14, 8, 0, Math.PI * 2, 0, Math.PI * amount), color, { outline: 0, rot: [-0.25, 0, 0] });
     eye.add(lid);
     return lid;
   };
@@ -178,7 +178,7 @@ export function createCharacterModel(def, { pod: withPod = true } = {}) {
       for (const p of pupils) p.scale.set(0.6, 1.3, 1);
       addBrow(-0.17, 0.2, 0.43, -0.5, 0.22);
       addBrow(0.17, 0.2, 0.43, 0.5, 0.22);
-      head.add(part(new THREE.ConeGeometry(0.035, 0.1, 6), 0xffffff, { pos: [0.1, -0.215, 0.44], rot: [Math.PI, 0, 0], outline: 0 })); // presinha
+      head.add(part(new THREE.ConeGeometry(0.035, 0.1, 6), 0xffffff, { pos: [0.1, -0.2, 0.45], rot: [Math.PI, 0, 0], scale: [0.8, 0.75, 0.8], outline: 0 })); // presinha
       mouth.position.set(0.04, -0.19, 0.43);
       mouth.scale.set(1.1, 0.8, 0.8);
       makeArms(def.color, def.accent);
@@ -214,14 +214,14 @@ export function createCharacterModel(def, { pod: withPod = true } = {}) {
         head.add(part(sphere(0.18), def.color, { pos: [s * 0.2, 0.26, 0.1] }));
         head.add(part(sphere(0.045, 8, 6), def.dark, { pos: [s * 0.08, 0.04, 0.57], outline: 0 }));
         head.add(part(sphere(0.07, 8, 6), 0xff9fbf, { pos: [s * 0.3, -0.1, 0.38], scale: [1, 0.6, 0.5], outline: 0 }));
-        addLid(addEye(s * 0.2, 0.33, 0.18, 0.14), 0.14, 0.52);
+        addLid(addEye(s * 0.2, 0.33, 0.18, 0.14), 0.14, 0.4);
       }
-      for (const p of pupils) p.position.y = -0.03;
+      for (const p of pupils) p.position.y = -0.035;
       for (const [x, y, z, r] of [[0, 0.3, -0.2, -0.7], [0, 0.2, -0.4, -1.0]]) head.add(part(new THREE.ConeGeometry(0.09, 0.26, 6), 0xffb13d, { pos: [x, y, z], rot: [r, 0, 0] }));
       body.add(part(new THREE.ConeGeometry(0.1, 0.28, 6), 0xffb13d, { pos: [0, 0.48, -0.26], rot: [-1.1, 0, 0] }));
       body.add(part(new THREE.ConeGeometry(0.09, 0.24, 6), 0xffb13d, { pos: [0, 0.24, -0.42], rot: [-1.4, 0, 0] }));
       mouth.position.set(0, -0.1, 0.5);
-      mouth.scale.set(2.1, 1.1, 1);
+      mouth.scale.set(2.0, 0.75, 1);
       // junco pendurado no canto da boca
       const reed = new THREE.Group();
       reed.position.set(0.17, -0.12, 0.52);
@@ -362,7 +362,7 @@ export function createCharacterModel(def, { pod: withPod = true } = {}) {
       // guarda alta e um jab de vez em quando, alternando o braço
       extras.armRest = (s, t) => {
         const turn = Math.floor(t / 1.9) % 2 ? 1 : -1, ph = t % 1.9;
-        return s === turn && ph < 0.22 ? [-1.5, s * 0.05] : [-2.2, s * 0.42];
+        return s === turn && ph < 0.22 ? [-1.5, s * 0.05] : [-1.95, s * -0.3];
       };
       extras.tick = (t) => {
         head.scale.x = head.scale.z = 1 + Math.sin(t * 5) * 0.02; // balanço de gelatina
@@ -373,14 +373,14 @@ export function createCharacterModel(def, { pod: withPod = true } = {}) {
     }
     // Pipoca: energia pura. Olhos esbugalhados, bico aberto, topete de pipoca, casca de ovo listrada.
     case 'pipoca': {
-      body.add(part(sphere(0.4), def.color, { pos: [0, 0.2, 0], scale: [1, 1.08, 0.95] }));
-      body.add(part(sphere(0.27), def.accent, { pos: [0, 0.2, 0.2], scale: [1, 1.1, 0.5], outline: 0 }));
+      body.add(part(sphere(0.4), def.color, { pos: [0, 0.26, 0], scale: [1, 1.0, 0.95] }));
+      body.add(part(sphere(0.25), def.accent, { pos: [0, 0.34, 0.22], scale: [1, 0.9, 0.5], outline: 0 }));
       // casca de ovo listrada como caixa de pipoca
-      body.add(part(cyl(0.45, 0.4, 0.3, 16), 0xfff4d6, { pos: [0, 0.02, 0], outline: 1.06 }));
+      body.add(part(cyl(0.46, 0.4, 0.36, 16), 0xfff4d6, { pos: [0, 0.12, 0], outline: 1.06 }));
       for (let i = 0; i < 16; i++) {
         const a = (i / 16) * Math.PI * 2;
-        if (i % 2 === 0) body.add(part(new THREE.BoxGeometry(0.09, 0.3, 0.02), 0xff4f5e, { pos: [Math.sin(a) * 0.435, 0.02, Math.cos(a) * 0.435], rot: [0, a, 0], outline: 0 }));
-        if (i % 2) body.add(part(new THREE.ConeGeometry(0.075, 0.13, 4), 0xfff4d6, { pos: [Math.sin(a) * 0.43, 0.21, Math.cos(a) * 0.43], outline: 0 }));
+        if (i % 2 === 0) body.add(part(new THREE.BoxGeometry(0.09, 0.36, 0.02), 0xff4f5e, { pos: [Math.sin(a) * 0.44, 0.12, Math.cos(a) * 0.44], rot: [0, a, 0], outline: 0 }));
+        if (i % 2) body.add(part(new THREE.ConeGeometry(0.075, 0.13, 4), 0xfff4d6, { pos: [Math.sin(a) * 0.44, 0.34, Math.cos(a) * 0.44], outline: 0 }));
       }
       head.add(part(sphere(0.4, 22, 16), def.color, { scale: [1, 1.02, 1] }));
       head.add(part(new THREE.ConeGeometry(0.17, 0.42, 10), 0xff7a2a, { pos: [0, -0.02, 0.52], rot: [Math.PI / 2 - 0.25, 0, 0], scale: [1.1, 1, 0.7] }));
@@ -400,6 +400,7 @@ export function createCharacterModel(def, { pod: withPod = true } = {}) {
       addEye(0.2, 0.1, 0.31, 0.14);
       pupils[0].scale.setScalar(1.15);
       pupils[1].scale.setScalar(0.5);
+      pupils[1].position.z = 0.14 * 0.86; // pupila miúda precisa ficar na superfície do olho
       addBrow(-0.21, 0.37, 0.36, 0.2, 0.17);
       addBrow(0.21, 0.3, 0.38, -0.2, 0.15);
       mouth.visible = false;
@@ -421,9 +422,9 @@ export function createCharacterModel(def, { pod: withPod = true } = {}) {
     default: {
       body.add(part(sphere(0.4), def.color, { pos: [0, 0.18, 0], scale: [1, 1.05, 1] }));
       head.add(part(sphere(0.47, 22, 16), def.color, { scale: [1.12, 0.92, 1] }));
-      addLid(addEye(0, 0.16, 0.4, 0.15), 0.15, 0.4);
-      addLid(addEye(-0.24, 0.0, 0.36, 0.115), 0.115, 0.46);
-      addLid(addEye(0.24, 0.0, 0.36, 0.115), 0.115, 0.46);
+      addLid(addEye(0, 0.16, 0.4, 0.15), 0.15, 0.33);
+      addLid(addEye(-0.24, 0.0, 0.36, 0.115), 0.115, 0.38);
+      addLid(addEye(0.24, 0.0, 0.36, 0.115), 0.115, 0.38);
       addBrow(0.02, 0.36, 0.47, 0.22, 0.26);
       addBrow(-0.27, 0.15, 0.42, -0.45, 0.17);
       addBrow(0.27, 0.15, 0.42, 0.45, 0.17);
@@ -453,6 +454,7 @@ export function createCharacterModel(def, { pod: withPod = true } = {}) {
       mouth.geometry.dispose();
       mouth.geometry = new THREE.TorusGeometry(0.075, 0.024, 6, 14, Math.PI);
       mouth.position.set(0, -0.27, 0.42);
+      mouth.rotation.z = 0;
       extras.mouthRest = 0; // bico (arco para baixo); só sorri quando ganha
       makeArms(def.color, def.accent);
       extras.armRest = (s) => [-1.15, s * -0.95]; // braços cruzados

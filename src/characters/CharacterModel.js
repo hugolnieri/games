@@ -9,8 +9,9 @@ const basic = (color) => new THREE.MeshBasicMaterial({ color });
  * Cria um personagem dentro do seu pod flutuante, só com primitivas.
  * Convenção: o personagem olha para +z local.
  */
-export function createCharacterModel(def) {
+export function createCharacterModel(def, { pod: withPod = true } = {}) {
   const mats = [];
+  const team = def.team ?? def.color; // cor do jogador (pod, brilho); a skin só troca o corpo
   const part = (geo, color, { outline = 1.08, pos, scale, rot } = {}) => {
     const mat = toon(color);
     mats.push(mat);
@@ -29,32 +30,36 @@ export function createCharacterModel(def) {
   // brilho de hover no chão
   const glow = new THREE.Mesh(
     new THREE.CircleGeometry(0.85, 28),
-    new THREE.MeshBasicMaterial({ color: def.color, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false }),
+    new THREE.MeshBasicMaterial({ color: team, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false }),
   );
   glow.rotation.x = -Math.PI / 2;
   glow.position.y = 0.03;
+  glow.visible = withPod;
   root.add(glow);
 
   // ---- pod (disco voador de pára-choque) ----
   const pod = new THREE.Group();
   tilt.add(pod);
-  const hull = part(new THREE.CylinderGeometry(0.95, 0.58, 0.44, 30), def.color, { pos: [0, 0.26, 0], outline: 1.06 });
-  pod.add(hull);
-  const bumper = part(new THREE.TorusGeometry(0.9, 0.15, 10, 36), def.accent, { outline: 0, pos: [0, 0.47, 0], rot: [Math.PI / 2, 0, 0] });
-  pod.add(bumper);
-  const bumperInk = new THREE.Mesh(new THREE.TorusGeometry(0.9, 0.19, 8, 36), new THREE.MeshBasicMaterial({ color: INK, side: THREE.BackSide }));
-  bumperInk.rotation.x = Math.PI / 2;
-  bumperInk.position.y = 0.47;
-  pod.add(bumperInk);
-  const belly = part(new THREE.CylinderGeometry(0.5, 0.3, 0.16, 20), def.dark, { pos: [0, 0.02, 0], outline: 0 });
-  pod.add(belly);
+  const teamAccent = def.teamAccent ?? def.accent, teamDark = def.teamDark ?? def.dark;
   const lamps = [];
-  for (let i = 0; i < 3; i++) {
-    const a = (i - 1) * 0.55;
-    const lamp = new THREE.Mesh(sphere(0.07, 8, 6), basic(0xfff3b0));
-    lamp.position.set(Math.sin(a) * 0.86, 0.3, Math.cos(a) * 0.86);
-    pod.add(lamp);
-    lamps.push(lamp);
+  if (withPod) {
+    const hull = part(new THREE.CylinderGeometry(0.95, 0.58, 0.44, 30), team, { pos: [0, 0.26, 0], outline: 1.06 });
+    pod.add(hull);
+    const bumper = part(new THREE.TorusGeometry(0.9, 0.15, 10, 36), teamAccent, { outline: 0, pos: [0, 0.47, 0], rot: [Math.PI / 2, 0, 0] });
+    pod.add(bumper);
+    const bumperInk = new THREE.Mesh(new THREE.TorusGeometry(0.9, 0.19, 8, 36), new THREE.MeshBasicMaterial({ color: INK, side: THREE.BackSide }));
+    bumperInk.rotation.x = Math.PI / 2;
+    bumperInk.position.y = 0.47;
+    pod.add(bumperInk);
+    const belly = part(new THREE.CylinderGeometry(0.5, 0.3, 0.16, 20), teamDark, { pos: [0, 0.02, 0], outline: 0 });
+    pod.add(belly);
+    for (let i = 0; i < 3; i++) {
+      const a = (i - 1) * 0.55;
+      const lamp = new THREE.Mesh(sphere(0.07, 8, 6), basic(0xfff3b0));
+      lamp.position.set(Math.sin(a) * 0.86, 0.3, Math.cos(a) * 0.86);
+      pod.add(lamp);
+      lamps.push(lamp);
+    }
   }
 
   // ---- criatura ----
@@ -208,6 +213,52 @@ export function createCharacterModel(def) {
       };
       break;
     }
+    case 'jujuba': {
+      body.add(part(sphere(0.42), def.color, { pos: [0, 0.17, 0], scale: [1.05, 1, 0.95] }));
+      body.add(part(sphere(0.27), def.accent, { pos: [0, 0.12, 0.22], scale: [1, 1.05, 0.5], outline: 0 }));
+      head.add(part(sphere(0.45, 22, 16), def.color, { scale: [1.08, 0.98, 1] }));
+      for (const s of [-1, 1]) {
+        head.add(part(sphere(0.17), def.color, { pos: [s * 0.34, 0.34, -0.02], scale: [1, 1, 0.6] }));
+        head.add(part(sphere(0.09, 10, 8), def.accent, { pos: [s * 0.34, 0.34, 0.07], scale: [1, 1, 0.5], outline: 0 }));
+        head.add(part(sphere(0.07, 8, 6), 0xff2f7a, { pos: [s * 0.3, -0.1, 0.36], scale: [1, 0.6, 0.5], outline: 0 }));
+      }
+      head.add(part(sphere(0.17), def.accent, { pos: [0, -0.1, 0.36], scale: [1.2, 0.85, 0.8], outline: 0 }));
+      head.add(part(sphere(0.06, 8, 6), def.dark, { pos: [0, -0.04, 0.5], scale: [1.3, 0.9, 0.8], outline: 0 }));
+      addEye(-0.17, 0.08, 0.37, 0.11);
+      addEye(0.17, 0.08, 0.37, 0.11);
+      mouth.position.set(0, -0.17, 0.47);
+      mouth.scale.setScalar(0.7);
+      makeArms(def.color, def.accent);
+      const drop = part(sphere(0.09, 10, 8), def.accent, { pos: [0.02, 0.5, 0.05], scale: [1, 1.3, 1] });
+      head.add(drop);
+      extras.tick = (t) => {
+        body.scale.x = body.scale.z = 1 + Math.sin(t * 5) * 0.025; // balanço de gelatina
+        drop.position.y = 0.5 + Math.sin(t * 4) * 0.02;
+      };
+      break;
+    }
+    case 'pipoca': {
+      body.add(part(sphere(0.4), def.color, { pos: [0, 0.18, 0], scale: [1, 1.08, 0.95] }));
+      body.add(part(sphere(0.27), def.accent, { pos: [0, 0.14, 0.2], scale: [1, 1.1, 0.5], outline: 0 }));
+      head.add(part(sphere(0.4, 22, 16), def.color, { scale: [1, 1.02, 1] }));
+      head.add(part(new THREE.ConeGeometry(0.17, 0.42, 10), 0xff7a2a, { pos: [0, -0.06, 0.52], rot: [Math.PI / 2, 0, 0], scale: [1.1, 1, 0.75] }));
+      const tuft = [];
+      for (let i = 0; i < 3; i++) {
+        const f = part(sphere(0.1, 10, 8), 0xff4f5e, { pos: [(i - 1) * 0.11, 0.44, -0.04], scale: [0.7, 1.7, 0.7], rot: [0, 0, (i - 1) * -0.45] });
+        head.add(f);
+        tuft.push(f);
+      }
+      addEye(-0.2, 0.1, 0.31, 0.14);
+      addEye(0.2, 0.1, 0.31, 0.14);
+      mouth.visible = false;
+      makeArms(def.color, def.dark, 0.3, 0.4);
+      for (const a of armPivots) a.scale.set(1.5, 1, 0.6); // asas
+      body.add(part(new THREE.ConeGeometry(0.16, 0.4, 6), def.dark, { pos: [0, 0.2, -0.42], rot: [-1.9, 0, 0], scale: [1.4, 1, 0.5] }));
+      extras.tick = (t) => {
+        tuft.forEach((f, i) => (f.rotation.x = Math.sin(t * 6 + i) * 0.18));
+      };
+      break;
+    }
     case 'glub':
     default: {
       body.add(part(sphere(0.4), def.color, { pos: [0, 0.18, 0], scale: [1, 1.05, 1] }));
@@ -254,7 +305,92 @@ export function createCharacterModel(def) {
   stars.visible = false;
   body.add(stars);
 
-  return { def, root, tilt, pod, body, head, eyes, pupils, mouth, arms: armPivots, mats, glow, stars, lamps, extras };
+  // acessório equipado (cosmético): preso à cabeça
+  const accTick = addAccessory(head, def.acc, def.anch || {}, part);
+  if (accTick) {
+    const base = extras.tick;
+    extras.tick = (t) => {
+      base?.(t);
+      accTick(t);
+    };
+  }
+
+  return { def, hasPod: withPod, root, tilt, pod, body, head, eyes, pupils, mouth, arms: armPivots, mats, glow, stars, lamps, extras };
+}
+
+/** Constrói o acessório `id` na cabeça. Devolve um tick opcional de animação. */
+function addAccessory(head, id, anch, part) {
+  if (!id) return null;
+  const [hy = 0.4, hz = 0] = anch.hat || [];
+  const [fy = 0.06, fz = 0.47] = anch.face || [];
+  const w = anch.w || 0.46;
+  const g = new THREE.Group();
+  head.add(g);
+  const cyl = (rt, rb, h, seg = 16) => new THREE.CylinderGeometry(rt, rb, h, seg);
+  switch (id) {
+    case 'acc-coroa': {
+      g.position.set(0, hy, hz);
+      g.add(part(cyl(0.21, 0.19, 0.13, 14), 0xffd23f, { pos: [0, 0.06, 0] }));
+      for (let i = 0; i < 5; i++) {
+        const a = (i / 5) * Math.PI * 2;
+        g.add(part(new THREE.ConeGeometry(0.06, 0.15, 4), 0xffd23f, { pos: [Math.cos(a) * 0.17, 0.19, Math.sin(a) * 0.17], outline: 1.15 }));
+      }
+      g.add(part(sphere(0.045, 8, 6), 0xff4f8b, { pos: [0, 0.07, 0.2], outline: 0 }));
+      return null;
+    }
+    case 'acc-cartola': {
+      g.position.set(0, hy, hz);
+      g.rotation.z = -0.12;
+      g.add(part(cyl(0.3, 0.3, 0.04, 18), 0x2a2140, { pos: [0, 0.03, 0] }));
+      g.add(part(cyl(0.18, 0.2, 0.3, 16), 0x2a2140, { pos: [0, 0.2, 0] }));
+      g.add(part(cyl(0.205, 0.205, 0.07, 16), 0xff4f8b, { pos: [0, 0.1, 0], outline: 0 }));
+      return null;
+    }
+    case 'acc-bone': {
+      g.position.set(0, hy - 0.06, hz);
+      g.add(part(new THREE.SphereGeometry(0.27, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), 0xff4f8b, { pos: [0, 0.02, 0] }));
+      g.add(part(cyl(0.2, 0.2, 0.03, 14), 0xffd23f, { pos: [0, 0.04, 0.26], scale: [1, 1, 0.8] }));
+      g.add(part(sphere(0.04, 8, 6), 0xffd23f, { pos: [0, 0.29, 0], outline: 0 }));
+      return null;
+    }
+    case 'acc-helice': {
+      g.position.set(0, hy - 0.05, hz);
+      g.add(part(new THREE.SphereGeometry(0.22, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), 0x2fb0ff, { pos: [0, 0.02, 0] }));
+      g.add(part(cyl(0.02, 0.02, 0.14, 6), 0x1a1033, { pos: [0, 0.29, 0], outline: 0 }));
+      const prop = new THREE.Group();
+      prop.position.y = 0.37;
+      prop.add(part(new THREE.BoxGeometry(0.5, 0.025, 0.09), 0xffd23f, { outline: 1.12 }), part(new THREE.BoxGeometry(0.09, 0.025, 0.5), 0xff4f8b, { outline: 1.12 }));
+      g.add(prop);
+      return (t) => {
+        prop.rotation.y = t * 14;
+      };
+    }
+    case 'acc-fones': {
+      g.position.set(0, 0.02, 0);
+      g.add(part(new THREE.TorusGeometry(w, 0.035, 6, 20, Math.PI), 0x2a2140, { outline: 0 }));
+      for (const s of [-1, 1]) g.add(part(cyl(0.13, 0.13, 0.1, 14), 0x7fe0d0, { pos: [s * w, 0, 0], rot: [0, 0, Math.PI / 2], outline: 1.12 }));
+      return null;
+    }
+    case 'acc-oculos': {
+      g.position.set(0, fy, fz);
+      for (const s of [-1, 1]) g.add(part(new THREE.BoxGeometry(0.24, 0.15, 0.04), 0x14082e, { pos: [s * 0.15, 0, 0], outline: 1.12 }));
+      g.add(part(new THREE.BoxGeometry(0.1, 0.03, 0.03), 0x14082e, { outline: 0 }));
+      const shine = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.025, 0.01), basic(0xffffff));
+      shine.position.set(-0.19, 0.03, 0.025);
+      shine.rotation.z = 0.5;
+      g.add(shine);
+      return null;
+    }
+    case 'acc-chifres': {
+      g.position.set(0, hy - 0.08, hz);
+      g.add(part(new THREE.SphereGeometry(0.26, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), 0x9aa3c7, { pos: [0, 0.02, 0] }));
+      for (const s of [-1, 1]) g.add(part(new THREE.ConeGeometry(0.07, 0.3, 8), 0xfff4d6, { pos: [s * 0.27, 0.16, 0], rot: [0, 0, s * -0.7] }));
+      return null;
+    }
+    default:
+      head.remove(g);
+      return null;
+  }
 }
 
 /** Animação procedural por estados, sem clipes. */
@@ -273,6 +409,9 @@ export class CharacterAnimator {
     this.spin = 0;
     this.squash = 0;
     this.dangerFlash = 0;
+    this.baseY = model.hasPod ? 0.16 : 0; // sem pod (veículo próprio) o corpo não flutua
+    this.bob = model.hasPod ? 0.035 : 0.012;
+    this.pose = model.def.pose || 'pose-pulo';
   }
 
   trigger(name) {
@@ -309,11 +448,11 @@ export class CharacterAnimator {
     for (const e of m.eyes) e.scale.y = damp(e.scale.y, eyeY, 30, dt);
 
     // flutuação + inclinação na direção do movimento
-    const bob = Math.sin(t * 3.1) * 0.035;
-    m.tilt.position.y = 0.16 + bob;
+    const bob = Math.sin(t * 3.1) * this.bob;
+    m.tilt.position.y = this.baseY + bob;
     this.lean = damp(this.lean, clamp(-vLocal * 0.035, -0.32, 0.32), 12, dt);
     m.tilt.rotation.z = this.lean;
-    m.glow.material.opacity = 0.4 + Math.sin(t * 6) * 0.1;
+    if (m.glow.visible) m.glow.material.opacity = 0.4 + Math.sin(t * 6) * 0.1;
 
     // olhar para a bola mais próxima
     if (look !== null) this.look = damp(this.look, clamp(look, -0.8, 0.8), 8, dt);
@@ -334,15 +473,48 @@ export class CharacterAnimator {
 
     if (this.mode === 'victory') {
       const j = Math.abs(Math.sin(t * 6.5));
-      m.body.position.y = 0.42 + j * 0.5;
+      let by = 0.42 + j * 0.5, ry = 0, rz = 0;
       m.body.scale.set(1 + (1 - j) * 0.1, 1 - (1 - j) * 0.12 + j * 0.05, 1 + (1 - j) * 0.1);
-      for (const arm of m.arms) {
-        arm.rotation.x = -2.7 + Math.sin(t * 13 + arm.userData.side) * 0.35;
-        arm.rotation.z = arm.userData.side * 0.35;
+      const arm = (fx, fz) => {
+        for (const a of m.arms) {
+          a.rotation.x = fx(a.userData.side);
+          a.rotation.z = fz(a.userData.side);
+        }
+      };
+      switch (this.pose) {
+        case 'pose-giro': // pirueta de braços abertos
+          by = 0.42 + j * 0.22;
+          ry = t * 9;
+          arm(() => -0.2, (s) => s * 1.45);
+          break;
+        case 'pose-onda': // ola: braços alternados, corpo gingando
+          by = 0.46;
+          rz = Math.sin(t * 5) * 0.28;
+          m.body.scale.set(1, 1, 1);
+          arm((s) => -2.4 + Math.sin(t * 5 + s * 1.6) * 0.9, (s) => s * 0.5);
+          break;
+        case 'pose-flex': // exibido: braços dobrados para cima, pulsando
+          by = 0.42 + Math.abs(Math.sin(t * 3.2)) * 0.08;
+          m.body.scale.set(1 + Math.sin(t * 6.4) * 0.06, 1, 1 + Math.sin(t * 6.4) * 0.06);
+          arm(() => -2.9, (s) => s * (1.25 + Math.sin(t * 6.4) * 0.12));
+          break;
+        case 'pose-robo': { // dança robótica em passos secos
+          const k = Math.floor(t * 4) % 4;
+          by = 0.42 + (k % 2) * 0.1;
+          ry = [0.5, 0, -0.5, 0][k];
+          m.body.scale.set(1, 1, 1);
+          arm((s) => (((k + (s > 0 ? 1 : 0)) % 2) ? -1.57 : -3.0), (s) => s * 0.9);
+          break;
+        }
+        default:
+          arm((s) => -2.7 + Math.sin(t * 13 + s) * 0.35, (s) => s * 0.35);
       }
+      m.body.position.y = by;
+      m.body.rotation.set(0, ry, rz);
       m.mouth.rotation.z = Math.PI;
     } else {
       m.body.position.y = 0.42;
+      m.body.rotation.set(0, 0, 0);
       m.body.scale.set(1 + sq, 1 - sq, 1 + sq);
       for (const arm of m.arms) {
         const s = arm.userData.side;

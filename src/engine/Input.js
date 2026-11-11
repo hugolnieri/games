@@ -15,7 +15,7 @@ export class Input {
     this.down = new Set();
     this.pressed = new Set();
     this.captureGame = false;
-    this.touch = { x: 0, actionPressed: false, dashPressed: false };
+    this.touch = { x: 0, y: 0, actionPressed: false, dashPressed: false };
     this.gp = null;
     this.gpPrev = [];
     this.gpPressed = new Set();
@@ -98,6 +98,7 @@ export class Input {
     if (this.isDown('KeyW', 'ArrowUp')) y += 1;
     if (this.isDown('KeyS', 'ArrowDown')) y -= 1;
     x += this.touch.x;
+    y += this.touch.y;
     let action = this.wasPressed('Space', 'KeyJ') || this.touch.actionPressed;
     let dash = this.wasPressed('ShiftLeft', 'ShiftRight', 'KeyK') || this.touch.dashPressed;
     const gp = this.gp;

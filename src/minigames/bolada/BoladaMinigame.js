@@ -40,6 +40,10 @@ export class BoladaMinigame extends Minigame {
     tagline: 'Defenda seu gol e mande as bolas para o gol dos outros.',
     minPlayers: 2,
     maxPlayers: 4,
+    keys: [['A D', 'mover'], ['Espaço', 'rebater'], ['Shift', 'dash']],
+    touch: { mode: 'lr', a: 'Rebater', b: 'Dash' },
+    quick: ['Defenda o seu gol: cada bola que entra tira 1 ponto.', 'Espaço dá o pulso que rebate a bola para longe de você.', 'Pulso com a bola quase encostando vira SUPER rebatida.'],
+    options: ['points', 'time'],
     camera: {
       fitRadius: C.arenaRadius + 1.2, // arena + paredes
       fitRadiusPortrait: C.arenaRadius + 0.5,
@@ -302,7 +306,7 @@ export class BoladaMinigame extends Minigame {
   _playerState(p) {
     const pod = this.sim.pods[p.seat];
     return {
-      index: p.index, seat: p.seat, name: p.def.name, color: p.def.color, characterId: p.def.id,
+      index: p.index, seat: p.seat, name: p.def.name, color: p.def.color, characterId: p.def.id, look: p,
       points: pod.points, max: this.sim.startPoints, active: pod.active, place: pod.place,
       isHuman: !!p.isHuman, difficulty: p.difficulty,
     };

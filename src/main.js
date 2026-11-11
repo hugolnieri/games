@@ -8,8 +8,7 @@ import { Effects } from './engine/Effects.js';
 import { CameraRig } from './engine/CameraRig.js';
 import { GameState } from './game/GameState.js';
 import { GameManager } from './game/GameManager.js';
-import { CHARACTERS } from './characters/characters.js';
-import { renderPortraits } from './characters/portraits.js';
+import { Portraits } from './characters/portraits.js';
 import { UI } from './ui/UI.js';
 import { HUD } from './ui/HUD.js';
 
@@ -33,7 +32,7 @@ const fx = new Effects(scene);
 const rig = new CameraRig(engine.camera);
 
 // ---------- interface ----------
-const portraits = renderPortraits(CHARACTERS);
+const portraits = new Portraits();
 const ui = new UI(uiEl, { state, portraits, audio });
 const hud = new HUD(uiEl, { camera: engine.camera, portraits, audio, input });
 

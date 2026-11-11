@@ -1,5 +1,8 @@
 import { Net, errorText, normalizeCode } from '../net/Net.js';
-import { CHARACTERS } from '../characters/characters.js';
+import { CHARACTERS, lookOf } from '../characters/characters.js';
+import { SKINS, getItem } from '../characters/cosmetics.js';
+import { hasMinigame } from '../minigames/index.js';
+import { GameManager } from './GameManager.js';
 import { shuffle } from '../engine/math.js';
 
 const SNAP_RATE = 1 / 30; // estados por segundo que o host manda
@@ -10,16 +13,26 @@ const MAX_PLAYERS = 4;
  * Quem entra é CLIENTE: manda só os comandos (eixos + toques de pulso/dash) e espelha o estado.
  *
  * Mensagens:
- *   cliente → host: hello{characterId}, char{characterId}, in{x,y,p,d}
- *   host → cliente: lobby{members, you, settings, code}, start{players, points, time, you}, s{...estado}, full
+ *   cliente → host: hello{look}, char{look}, in{x,y,p,d}
+ *   host → cliente: lobby{members, you, settings, code}, start{plan, you, ids, idx, circuit, totals, ...},
+ *                   s{...estado}, full
+ * `look` = { characterId, skin, acc, pose }: a aparência escolhida vale para a sala, todas as rodadas
+ * e os resultados. A sala continua a mesma entre as rodadas de um Circuito.
  */
+/** Aparência recebida pela rede: só aceita ids que existem no catálogo. */
+function cleanLook(l) {
+  const ch = CHARACTERS.find((c) => c.id === l?.characterId) || CHARACTERS[0];
+  const ok = (id, type) => (getItem(id)?.type === type ? id : null);
+  return { characterId: ch.id, skin: (SKINS[ch.id] || []).some((s) => s.id === l?.skin) ? l.skin : null, acc: ok(l?.acc, 'acc'), pose: ok(l?.pose, 'pose') };
+}
 export class OnlineSession {
   constructor(gm) {
     this.gm = gm;
     this.net = new Net();
     this.role = null;
     this.code = '';
-    this.members = []; // host: [{ id, conn, characterId }]; cliente: cópia do lobby
+    this.members = []; // host: [{ id, conn, look }]; cliente: cópia do lobby
+    this.round = null; // host: { plan, ids, idx, circuit, id } da sessão em andamento
     this.you = 0;
     this.inMatch = false;
     this.sendT = 0;
@@ -27,7 +40,7 @@ export class OnlineSession {
     this.inT = 0;
     this.playerIndexById = new Map();
     const lc = gm.state.lastConfig;
-    this.settings = { bots: 0, difficulty: lc.difficulty, points: lc.points, time: lc.time };
+    this.settings = { bots: 0, difficulty: lc.difficulty, points: lc.points, time: lc.time, mode: lc.mode, minigameId: lc.minigameId, seq: [...(lc.seq || [])] };
     this.net.onMessage = (conn, msg) => (this.role === 'host' ? this._hostMsg(conn, msg) : this._clientMsg(msg));
     this.net.onConnect = () => {};
     this.net.onClose = (conn) => (this.role === 'host' ? this._hostDrop(conn) : this._lost('O anfitrião saiu da sala.'));
@@ -105,7 +118,7 @@ export class OnlineSession {
       this.role = null;
       return;
     }
-    this.members = [{ id: 'host', conn: null, characterId: this.gm.state.lastConfig.characterId }];
+    this.members = [{ id: 'host', conn: null, look: this.gm.state.look() }];
     this._keepAwake();
     this.showLobby();
   }
@@ -127,7 +140,7 @@ export class OnlineSession {
       return;
     }
     this._keepAwake();
-    this.net.send(this.conn, { t: 'hello', characterId: this.gm.state.lastConfig.characterId });
+    this.net.send(this.conn, { t: 'hello', look: this.gm.state.look() });
   }
 
   leave() {
@@ -151,7 +164,7 @@ export class OnlineSession {
       code: this.code,
       isHost: this.isHost,
       you: this.you,
-      members: this.members.map((m) => ({ characterId: m.characterId })),
+      members: this.members.map((m) => ({ look: m.look })),
       settings: this.settings,
       maxPlayers: MAX_PLAYERS,
       status: this.isHost ? this.netStatus : 'online',
@@ -167,33 +180,40 @@ export class OnlineSession {
 
   _broadcastLobby() {
     this.members.forEach((m, i) => {
-      if (m.conn) this.net.send(m.conn, { t: 'lobby', code: this.code, you: i, members: this.members.map((x) => ({ characterId: x.characterId })), settings: this.settings });
+      if (m.conn) this.net.send(m.conn, { t: 'lobby', code: this.code, you: i, members: this.members.map((x) => ({ look: x.look })), settings: this.settings });
     });
     if (!this.inMatch && this.gm.ui.current === 'lobby') this.gm.ui.show('lobby', this.lobbyData());
   }
 
-  _freeCharacter(prefer, exceptIndex = -1) {
-    const taken = new Set(this.members.filter((_, i) => i !== exceptIndex).map((m) => m.characterId));
-    if (!taken.has(prefer)) return prefer;
-    return CHARACTERS.find((c) => !taken.has(c.id))?.id || prefer;
+  /** Personagens não se repetem na sala: se o pedido já tem dono, cai no primeiro livre (sem a skin). */
+  _freeLook(look, exceptIndex = -1) {
+    look = cleanLook(look);
+    const taken = new Set(this.members.filter((_, i) => i !== exceptIndex).map((m) => m.look.characterId));
+    if (!taken.has(look.characterId)) return look;
+    const free = CHARACTERS.find((c) => !taken.has(c.id));
+    return free ? { ...look, characterId: free.id, skin: null } : look;
   }
 
-  /** Escolha de personagem feita na tela da sala. */
+  /** Escolha de personagem feita na tela da sala (a skin equipada daquele personagem vai junto). */
   setCharacter(id) {
     this.gm.state.lastConfig.characterId = id;
     this.gm.state.save();
+    const look = this.gm.state.look(id);
     if (this.isHost) {
-      this.members[0].characterId = this._freeCharacter(id, 0);
+      this.members[0].look = this._freeLook(look, 0);
       this._broadcastLobby();
     } else {
-      this.net.send(this.conn, { t: 'char', characterId: id });
+      this.net.send(this.conn, { t: 'char', look });
     }
   }
 
-  /** Opções da partida (só o host). */
-  setOption(key, value) {
+  /** Opções da sala (só o host): modo, minigame, sequência do circuito, bots, dificuldade... */
+  setOptions(patch) {
     if (!this.isHost) return;
-    this.settings[key] = value;
+    Object.assign(this.settings, patch);
+    const lc = this.gm.state.lastConfig;
+    for (const k of ['mode', 'minigameId', 'seq', 'difficulty', 'points', 'time']) if (k in patch) lc[k] = patch[k];
+    this.gm.state.save();
     this._broadcastLobby();
   }
 
@@ -208,12 +228,12 @@ export class OnlineSession {
         setTimeout(() => conn.close(), 300);
         return;
       }
-      this.members.push({ id: conn.peer, conn, characterId: this._freeCharacter(String(msg.characterId)) });
+      this.members.push({ id: conn.peer, conn, look: this._freeLook(msg.look) });
       this.settings.bots = Math.min(this.settings.bots, MAX_PLAYERS - this.members.length);
       this.gm.audio.play('ui');
       this._broadcastLobby();
     } else if (msg.t === 'char' && idx > 0 && !this.inMatch) {
-      if (CHARACTERS.some((c) => c.id === msg.characterId)) this.members[idx].characterId = this._freeCharacter(msg.characterId, idx);
+      this.members[idx].look = this._freeLook(msg.look, idx);
       this._broadcastLobby();
     } else if (msg.t === 'in' && this.inMatch) {
       const pi = this.playerIndexById.get(conn.peer);
@@ -233,32 +253,68 @@ export class OnlineSession {
     this._broadcastLobby();
   }
 
-  /** Host: começa (ou recomeça) a partida para todos. */
+  /** Host: começa (ou recomeça do zero) a partida ou o circuito para todos. */
   startGame() {
     if (!this.isHost) return;
     const s = this.settings;
-    const taken = new Set(this.members.map((m) => m.characterId));
+    const taken = new Set(this.members.map((m) => m.look.characterId));
     const botChars = shuffle(CHARACTERS.filter((c) => !taken.has(c.id)));
     const bots = Math.max(0, Math.min(s.bots, MAX_PLAYERS - this.members.length, botChars.length));
     // no mínimo 2 jogadores na arena
     const nBots = this.members.length + bots < 2 ? 1 : bots;
     const plan = [
-      ...this.members.map((m) => ({ kind: 'human', characterId: m.characterId, id: m.id })),
+      ...this.members.map((m) => ({ kind: 'human', id: m.id, ...m.look })),
       ...botChars.slice(0, nBots).map((c) => ({ kind: 'bot', characterId: c.id, difficulty: s.difficulty })),
     ];
-    this.playerIndexById = new Map(plan.map((p, i) => [p.id, i]).filter(([id]) => id));
-    this.members.forEach((m, i) => {
-      if (m.conn) this.net.send(m.conn, { t: 'start', plan: plan.map(({ kind, characterId, difficulty }) => ({ kind, characterId, difficulty })), you: i, points: s.points, time: s.time });
-    });
+    this.round = { plan, ids: GameManager.sequence(s), circuit: s.mode === 'circuit', id: GameManager.matchId(), idx: 0, totals: null, wins: null, last: null };
+    this._launch();
+  }
+
+  /** Host: próxima rodada do circuito, levando a pontuação acumulada. Todos seguem na mesma sala. */
+  nextRound() {
+    const S = this.gm.session, R = this.round;
+    if (!this.isHost || !R || !S || !R.circuit || R.idx >= R.ids.length - 1) return;
+    Object.assign(R, { idx: R.idx + 1, totals: [...S.totals], wins: [...S.wins], last: [...S.last] });
+    this._launch();
+  }
+
+  /** Host: recomeça a rodada atual (menu de pausa). */
+  restartRound() {
+    if (this.isHost && this.round) this._launch();
+  }
+
+  _launch() {
+    const R = this.round, s = this.settings;
+    // quem saiu da sala no meio do circuito vira bot nas rodadas seguintes
+    const here = new Set(this.members.map((m) => m.id));
+    for (const p of R.plan) {
+      if (p.kind === 'human' && !here.has(p.id)) {
+        p.kind = 'bot';
+        p.difficulty = 'normal';
+      }
+    }
+    this.playerIndexById = new Map(R.plan.map((p, i) => [p.kind === 'human' ? p.id : null, i]).filter(([id]) => id));
+    const base = { t: 'start', plan: R.plan.map(({ id, ...p }) => p), points: s.points, time: s.time, ids: R.ids, idx: R.idx, circuit: R.circuit, id: R.id, totals: R.totals, wins: R.wins, last: R.last };
+    for (const m of this.members) if (m.conn) this.net.send(m.conn, { ...base, you: this.playerIndexById.get(m.id) });
     this.inMatch = true;
     this.sendT = 0;
-    this.gm.startOnline(this._players(plan, 0), s, 'host');
+    this._begin(base, this.playerIndexById.get('host'), 'host');
+  }
+
+  /** Abre a rodada nesta máquina a partir da mensagem de início (igual para host e cliente). */
+  _begin(msg, you, role) {
+    const ids = (msg.ids || []).filter(hasMinigame);
+    if (!ids.length) return;
+    this.gm.startSession({
+      ids, circuit: !!msg.circuit, players: this._players(msg.plan, you), points: msg.points, time: msg.time, matchId: `${msg.id}:${this.code}`,
+      net: { role }, idx: Math.min(msg.idx | 0, ids.length - 1), totals: msg.totals ? [...msg.totals] : null, wins: msg.wins ? [...msg.wins] : null, last: msg.last ? [...msg.last] : null,
+    });
   }
 
   /** Converte o plano de jogadores para a visão de quem está nesta máquina (`you`). */
   _players(plan, you) {
     return plan.map((p, i) => ({
-      characterId: p.characterId,
+      ...lookOf(p.kind === 'human' ? cleanLook(p) : p),
       difficulty: p.difficulty || 'normal',
       isHuman: p.kind === 'human' && i === you,
       isRemote: p.kind === 'human' && i !== you,
@@ -276,8 +332,7 @@ export class OnlineSession {
       if (!this.inMatch || this.gm.mode === 'result') this.showLobby();
     } else if (msg.t === 'start') {
       this.inMatch = true;
-      this.you = msg.you;
-      this.gm.startOnline(this._players(msg.plan, msg.you), { points: msg.points, time: msg.time }, 'client');
+      this._begin(msg, msg.you, 'client');
     } else if (msg.t === 's' && this.inMatch) {
       this.gm.mg?.applySnapshot?.(msg.s);
     } else if (msg.t === 'full') {

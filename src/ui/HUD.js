@@ -29,10 +29,14 @@ export class HUD {
       <div class="hud-floats"></div>
       <div class="hud-banner" role="status"><b></b><span></span></div>
       <div class="hud-count" aria-live="assertive"></div>
-      <div class="hud-keys"><span><kbd>A</kbd><kbd>D</kbd> mover</span><span><kbd>Espaço</kbd> rebater</span><span><kbd>Shift</kbd> dash</span></div>
+      <div class="hud-rules" hidden></div>
+      <div class="hud-keys"></div>
       <div class="hud-hint"></div>
       <div class="touch" aria-hidden="true">
-        <div class="touch-move"><button class="tbtn" data-t="left">◀</button><button class="tbtn" data-t="right">▶</button></div>
+        <div class="touch-move">
+          <button class="tbtn tbtn--lr" data-t="left">◀</button><button class="tbtn tbtn--lr" data-t="right">▶</button>
+          <div class="tstick"><i></i></div>
+        </div>
         <div class="touch-act"><button class="tbtn tbtn--dash" data-t="dash">Dash</button><button class="tbtn tbtn--hit" data-t="hit">Rebater</button></div>
       </div>`;
     root.appendChild(this.el);
@@ -46,6 +50,10 @@ export class HUD {
     this.countEl = q('.hud-count');
     this.keysEl = q('.hud-keys');
     this.hintEl = q('.hud-hint');
+    this.rulesEl = q('.hud-rules');
+    this.touchEl = q('.touch');
+    this.btnA = q('.tbtn--hit');
+    this.btnB = q('.tbtn--dash');
     q('.hud-pause').addEventListener('click', () => this.onPause());
     this.v = new THREE.Vector3();
     this.floats = [];
@@ -86,6 +94,40 @@ export class HUD {
       b.addEventListener('pointercancel', up);
       b.addEventListener('lostpointercapture', up);
     }
+    // direcional analógico (minigames de movimento livre)
+    const stick = this.el.querySelector('.tstick'), knob = stick.firstElementChild;
+    let pid = null;
+    const move = (e) => {
+      const r = stick.getBoundingClientRect(), R = r.width / 2;
+      let dx = (e.clientX - (r.left + R)) / (R * 0.62), dy = (e.clientY - (r.top + R)) / (R * 0.62);
+      const l = Math.hypot(dx, dy);
+      if (l > 1) {
+        dx /= l;
+        dy /= l;
+      }
+      const dead = l < 0.18;
+      this.input.touch.x = dead ? 0 : dx;
+      this.input.touch.y = dead ? 0 : -dy;
+      knob.style.transform = `translate(${(dx * R * 0.5).toFixed(1)}px, ${(dy * R * 0.5).toFixed(1)}px)`;
+    };
+    const release = (e) => {
+      if (e.pointerId !== pid) return;
+      pid = null;
+      this.input.touch.x = this.input.touch.y = 0;
+      knob.style.transform = '';
+      stick.classList.remove('on');
+    };
+    stick.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      pid = e.pointerId;
+      stick.setPointerCapture?.(pid);
+      stick.classList.add('on');
+      move(e);
+    });
+    stick.addEventListener('pointermove', (e) => e.pointerId === pid && move(e));
+    stick.addEventListener('pointerup', release);
+    stick.addEventListener('pointercancel', release);
+    stick.addEventListener('lostpointercapture', release);
   }
 
   /**
@@ -105,10 +147,11 @@ export class HUD {
   }
   hide() {
     this.el.hidden = true;
-    this.input.touch.x = 0;
+    this.input.touch.x = this.input.touch.y = 0;
   }
 
-  build(h) {
+  /** `meta` = static meta do minigame: teclas, botões de toque e regras rápidas. */
+  build(h, meta = {}) {
     for (const c of Object.values(this.corners)) c.innerHTML = '';
     this.tags.innerHTML = '';
     this.floatsEl.innerHTML = '';
@@ -120,24 +163,24 @@ export class HUD {
       el.className = 'pl';
       el.style.setProperty('--c', hexToCss(p.color));
       el.innerHTML = `
-        <img class="pl-face" src="${this.portraits[p.characterId] || ''}" alt="">
+        <img class="pl-face" src="${this.portraits.of(p.look || p.characterId)}" alt="">
         <div class="pl-info">
           <div class="pl-name">${p.name}${p.isHuman ? ' <em>você</em>' : ''}</div>
-          <div class="pl-pips">${'<i></i>'.repeat(p.max)}</div>
+          <div class="pl-pips">${p.max > 0 && p.max <= 15 ? '<i></i>'.repeat(p.max) : ''}</div>
         </div>
-        <div class="pl-pts" aria-label="pontos">${p.points}</div>
+        <div class="pl-pts" aria-label="pontos">${p.text ?? p.points}</div>
         <div class="pl-out"></div>`;
       // canto relativo a quem está vendo: o próprio gol fica embaixo à esquerda
       this.corners[CORNER_BY_SEAT[(p.seat - (h.viewSeat || 0) + 4) % 4]].appendChild(el);
       this.panels.set(p.seat, {
-        el, pts: el.querySelector('.pl-pts'), pips: [...el.querySelectorAll('.pl-pips i')], out: el.querySelector('.pl-out'), last: p.points, active: true,
+        el, pts: el.querySelector('.pl-pts'), pips: [...el.querySelectorAll('.pl-pips i')], out: el.querySelector('.pl-out'), last: p.points, lastText: p.text ?? p.points, active: true,
       });
       const tag = document.createElement('div');
       tag.className = 'tag' + (p.isHuman ? ' tag--you' : '');
       tag.style.setProperty('--c', hexToCss(p.color));
-      tag.innerHTML = `<b>${p.points}</b>${p.isHuman ? '<span>você</span>' : ''}`;
+      tag.innerHTML = `<b>${p.text ?? p.points}</b>${p.isHuman ? '<span>você</span>' : ''}`;
       this.tags.appendChild(tag);
-      this.tagEls.set(p.seat, { el: tag, b: tag.querySelector('b'), last: p.points });
+      this.tagEls.set(p.seat, { el: tag, b: tag.querySelector('b'), last: p.text ?? p.points });
     }
     this.timerEl.hidden = !h.hasLimit;
     this.timerEl.className = 'hud-timer';
@@ -151,9 +194,22 @@ export class HUD {
     this.keysT = 6;
     this.keysEl.hidden = this.touch;
     const pad = !!this.input.gp;
+    const t = meta.touch || {};
+    const kbd = (k) => k.split(' ').map((x) => `<kbd>${x}</kbd>`).join('');
     this.keysEl.innerHTML = pad
-      ? '<span><kbd>Analógico</kbd> mover</span><span><kbd>A</kbd><kbd>✕</kbd> rebater</span><span><kbd>B</kbd><kbd>◯</kbd> dash</span>'
-      : '<span><kbd>A</kbd><kbd>D</kbd> mover</span><span><kbd>Espaço</kbd> rebater</span><span><kbd>Shift</kbd> dash</span>';
+      ? `<span><kbd>Analógico</kbd> mover</span>${t.a ? `<span><kbd>A</kbd><kbd>✕</kbd> ${t.a.toLowerCase()}</span>` : ''}${t.b ? `<span><kbd>B</kbd><kbd>◯</kbd> ${t.b.toLowerCase()}</span>` : ''}`
+      : (meta.keys || []).map(([k, d]) => `<span>${kbd(k)} ${d.replace(/^ou setas: /, '')}</span>`).join('');
+    // toque: botões ◀ ▶ (Bolada) ou direcional analógico; rótulos por minigame
+    this.touchEl.dataset.mode = t.mode === 'lr' ? 'lr' : 'stick';
+    this.btnA.textContent = t.a || '';
+    this.btnA.hidden = !t.a;
+    this.btnB.textContent = t.b || '';
+    this.btnB.hidden = !t.b;
+    this.input.touch.x = this.input.touch.y = 0;
+    // regras rápidas: ficam na tela durante a contagem
+    const quick = meta.quick || [];
+    this.rulesEl.innerHTML = quick.length ? `<b>${meta.name}</b><ul>${quick.map((q) => `<li>${q}</li>`).join('')}</ul>` : '';
+    this.rulesEl.hidden = !quick.length || !!h.demo;
   }
 
   update(h, labels, dt) {
@@ -176,8 +232,12 @@ export class HUD {
     for (const p of h.players) {
       const P = this.panels.get(p.seat);
       if (!P) continue;
+      const shown = p.text ?? p.points;
+      if (shown !== P.lastText) {
+        P.pts.textContent = shown;
+        P.lastText = shown;
+      }
       if (p.points !== P.last) {
-        P.pts.textContent = p.points;
         P.pips.forEach((pip, i) => pip.classList.toggle('lost', i >= p.points));
         if (p.points < P.last) {
           P.el.classList.remove('hit');
@@ -186,7 +246,7 @@ export class HUD {
         }
         P.last = p.points;
       }
-      P.el.classList.toggle('danger', p.active && p.points <= 3);
+      P.el.classList.toggle('danger', p.danger ?? (p.active && p.points <= 3));
       if (!p.active && P.active) {
         P.active = false;
         P.el.classList.add('is-out');
@@ -205,11 +265,12 @@ export class HUD {
       T.el.style.opacity = visible ? '1' : '0';
       if (!visible) continue;
       T.el.style.transform = `translate(${((this.v.x * 0.5 + 0.5) * w).toFixed(1)}px, ${((-this.v.y * 0.5 + 0.5) * hh).toFixed(1)}px) translate(-50%, -100%)`;
-      if (l.points !== T.last) {
-        T.b.textContent = l.points;
-        T.last = l.points;
+      const shownTag = l.text ?? l.points;
+      if (shownTag !== T.last) {
+        T.b.textContent = shownTag;
+        T.last = shownTag;
       }
-      T.el.classList.toggle('danger', l.points <= 3);
+      T.el.classList.toggle('danger', l.danger ?? l.points <= 3);
     }
 
     // textos flutuantes presos ao mundo
@@ -229,7 +290,7 @@ export class HUD {
     const pad = !!this.input.gp;
     const fast = pad ? 'Y ou △' : 'Enter';
     const hint = h.humanOut
-      ? h.online
+      ? h.online || h.noFfwd
         ? 'Você está fora. Assista ao final da partida.'
         : this.touch && !pad
         ? 'Você está fora. Assista ao final ou pause.'
@@ -280,6 +341,7 @@ export class HUD {
   countdown(text) {
     const c = this.countEl;
     c.textContent = text;
+    if (text === 'VAI!') this.rulesEl.hidden = true;
     c.className = 'hud-count' + (text === 'VAI!' ? ' go' : '');
     void c.offsetWidth;
     c.classList.add('pop');

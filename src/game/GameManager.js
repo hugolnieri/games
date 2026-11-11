@@ -1,6 +1,7 @@
-import { getMinigame } from '../minigames/index.js';
+import { getMinigame, hasMinigame, MINIGAMES, CIRCUIT_POINTS } from '../minigames/index.js';
 import { Minigame } from './Minigame.js';
-import { CHARACTERS } from '../characters/characters.js';
+import { CHARACTERS, getCharacter } from '../characters/characters.js';
+import { matchReward, CHAMPION_BONUS } from '../characters/cosmetics.js';
 import { shuffle } from '../engine/math.js';
 import { OnlineSession } from './Online.js';
 
@@ -8,6 +9,10 @@ import { OnlineSession } from './Online.js';
  * Máquina de estados do jogo:
  *   menu (demo ao vivo no fundo) → countdown → playing ⇄ paused → result → countdown | menu
  * Não conhece regras de nenhum minigame: só a interface de game/Minigame.js.
+ *
+ * `session` descreve o que está sendo jogado, solo ou online, partida única ou Circuito:
+ *   { ids: [minigames], idx (rodada), players (fixos na sessão inteira), circuit, totals, wins, last,
+ *     points, time, net: { role } | null, matchId, scored }
  */
 export class GameManager {
   constructor(deps) {
@@ -17,6 +22,7 @@ export class GameManager {
     this.mg = null;
     this.t = 0;
     this.online = null; // OnlineSession quando há uma sala aberta
+    this.session = null;
   }
 
   _ctx() {
@@ -54,11 +60,13 @@ export class GameManager {
 
   _startDemo() {
     this._clear();
-    const Cls = getMinigame(this.state.lastConfig.minigameId);
+    const lc = this.state.lastConfig;
+    const Cls = getMinigame(lc.mode === 'circuit' && lc.seq?.length ? lc.seq.find(hasMinigame) : lc.minigameId);
+    this.demoId = Cls.meta.id;
     this.mg = new Cls(this._ctx());
     this.mg.setup({
       demo: true, points: 5, time: 0,
-      players: shuffle(CHARACTERS).map((c, i) => ({ characterId: c.id, isHuman: false, difficulty: i % 2 ? 'hard' : 'normal' })),
+      players: shuffle(CHARACTERS).slice(0, 4).map((c, i) => ({ characterId: c.id, isHuman: false, difficulty: i % 2 ? 'hard' : 'normal' })),
     });
     this.mg.start();
     this.refit();
@@ -70,25 +78,50 @@ export class GameManager {
     this.input.captureGame = false;
   }
 
+  /** Sequência de minigames de uma configuração (1 para partida única). */
+  static sequence(cfg) {
+    if (cfg.mode !== 'circuit') return [getMinigame(cfg.minigameId).meta.id];
+    const seq = (cfg.seq || []).filter(hasMinigame);
+    return seq.length >= 2 ? seq : shuffle(MINIGAMES.map((m) => m.meta.id)).slice(0, 4);
+  }
+  static matchId() {
+    return Date.now().toString(36) + Math.floor(Math.random() * 1e9).toString(36);
+  }
+
+  /** Partida solo (ou circuito solo): você + bots. O personagem e a skin valem para todas as rodadas. */
   startMatch(cfg = this.state.lastConfig) {
     this.state.lastConfig = { ...cfg };
     this.state.save();
-    this._clear();
-    const Cls = getMinigame(cfg.minigameId);
-    const { minPlayers, maxPlayers } = Cls.meta;
-    const bots = Math.min(Math.max(cfg.bots, minPlayers - 1), maxPlayers - 1, CHARACTERS.length - 1);
+    const bots = Math.min(Math.max(cfg.bots, 1), 3);
     const others = shuffle(CHARACTERS.filter((c) => c.id !== cfg.characterId));
     const players = [
-      { characterId: cfg.characterId, isHuman: true },
+      { ...this.state.look(cfg.characterId), isHuman: true },
       ...others.slice(0, bots).map((c) => ({ characterId: c.id, isHuman: false, difficulty: cfg.difficulty })),
     ];
-    this._beginMatch(Cls, { players, points: cfg.points, time: cfg.time });
+    this.startSession({ ids: GameManager.sequence(cfg), circuit: cfg.mode === 'circuit', players, points: cfg.points, time: cfg.time, matchId: GameManager.matchId() });
   }
 
-  /** Partida online: `players` já vem na visão desta máquina (isHuman = você, isRemote = amigos). */
-  startOnline(players, cfg, role) {
+  /** Começa uma sessão (rodada `idx`). Online, `net` = { role } e os dados vêm do anfitrião. */
+  startSession({ ids, circuit, players, points, time, matchId, net = null, idx = 0, totals, wins, last }) {
+    const zero = () => players.map(() => 0);
+    this.session = { ids, circuit, players, points, time, matchId, net, idx, totals: totals || zero(), wins: wins || zero(), last: last || zero(), scored: false };
+    this._playRound();
+  }
+
+  _playRound() {
+    const S = this.session;
+    S.scored = false;
     this._clear();
-    this._beginMatch(getMinigame(this.state.lastConfig.minigameId), { players, points: cfg.points, time: cfg.time, net: { role } });
+    const Cls = getMinigame(S.ids[S.idx]);
+    // no circuito o Bolada usa regras curtas para as rodadas terem duração parecida
+    this._beginMatch(Cls, { players: S.players, points: S.circuit ? 5 : S.points, time: S.circuit ? 120 : S.time, net: S.net || undefined });
+  }
+
+  nextRound() {
+    const S = this.session;
+    if (!S || !S.circuit || S.idx >= S.ids.length - 1) return;
+    S.idx++;
+    this._playRound();
   }
 
   _beginMatch(Cls, setupCfg) {
@@ -98,8 +131,10 @@ export class GameManager {
     this.refit();
     this.rig.yaw = this.mg.getViewYaw?.() || 0;
     this.ui.show(null);
-    this.hud.build(this.mg.getHud());
+    this.hud.build(this.mg.getHud(), Cls.meta);
     this.hud.show();
+    const S = this.session;
+    if (S?.circuit) this.hud.banner(`Rodada ${S.idx + 1} de ${S.ids.length}`, { sub: Cls.meta.name, duration: 2.2 });
     this.rig.viewShiftTarget = 0;
     this.rig.setGame(1.6);
     this.mode = 'countdown';
@@ -170,7 +205,31 @@ export class GameManager {
     this.rig.viewShiftTarget = this._menuShift();
     this.hud.hide();
     this.input.captureGame = false;
-    this.ui.show('result', { results: this.mg.getResults(), meta: this.mg.constructor.meta, online: !!this.online, isHost: this.online?.isHost });
+    const S = this.session;
+    const results = this.mg.getResults();
+    const meta = this.mg.constructor.meta;
+    const mine = results.find((r) => r.isHuman);
+    // recompensa: uma vez por rodada concluída (a chave impede pagar de novo)
+    let coins = mine ? this.state.reward(`${S.matchId}:${S.idx}`, matchReward(mine.place)) : 0;
+    let circuit = null;
+    if (S.circuit) {
+      if (!S.scored) {
+        S.scored = true;
+        for (const r of results) {
+          S.totals[r.index] += CIRCUIT_POINTS[r.place - 1] ?? 0;
+          if (r.place === 1) S.wins[r.index]++;
+          S.last[r.index] = r.place;
+        }
+      }
+      // classificação: pontos, depois vitórias de rodada, depois quem foi melhor na última
+      const standings = S.players
+        .map((p, i) => ({ index: i, name: getCharacter(p.characterId).name, color: getCharacter(p.characterId).color, look: p, isHuman: !!p.isHuman, total: S.totals[i], wins: S.wins[i], last: S.last[i] }))
+        .sort((a, b) => b.total - a.total || b.wins - a.wins || a.last - b.last || a.index - b.index);
+      const final = S.idx >= S.ids.length - 1;
+      if (final && standings[0].isHuman) coins += this.state.reward(`${S.matchId}:campeao`, CHAMPION_BONUS);
+      circuit = { idx: S.idx, n: S.ids.length, final, standings, next: final ? '' : getMinigame(S.ids[S.idx + 1]).meta.name };
+    }
+    this.ui.show('result', { results, meta, online: !!this.online, isHost: this.online?.isHost, coins, circuit });
   }
 
   onAction(action, data = {}) {
@@ -178,16 +237,35 @@ export class GameManager {
       case 'play': this.ui.show('setup'); break;
       case 'howto': this.ui.show('howto'); break;
       case 'settings': this.ui.show('settings'); break;
-      case 'back':
-        if (this.online) this.leaveOnline();
-        else this.ui.show('main');
+      case 'shop':
+        this.ui.shopFrom = this.ui.current === 'setup' ? 'setup' : 'main';
+        this.ui.show('shop');
         break;
+      case 'back':
+        if (this.ui.current === 'shop') this.ui.show(this.ui.shopFrom || 'main');
+        else if (this.online) this.leaveOnline();
+        else {
+          this.ui.show('main');
+          // a demo do menu acompanha o minigame escolhido
+          const lc = this.state.lastConfig;
+          const want = lc.mode === 'circuit' && lc.seq?.length ? lc.seq.find(hasMinigame) : lc.minigameId;
+          if (this.mode === 'menu' && want && want !== this.demoId) this._startDemo();
+        }
+        break;
+      case 'look-changed': break;
       case 'start': this.startMatch(this.state.lastConfig); break;
       case 'resume': this.resume(); break;
       case 'restart':
+        if (this.online) this.online.restartRound();
+        else if (this.session) this._playRound();
+        break;
       case 'again':
         if (this.online) this.online.startGame();
         else this.startMatch();
+        break;
+      case 'next':
+        if (this.online) this.online.nextRound();
+        else this.nextRound();
         break;
       case 'menu':
         if (this.online) this.leaveOnline();
@@ -208,7 +286,8 @@ export class GameManager {
         this.online.join(data.code);
         break;
       case 'net-char': this.online?.setCharacter(data.value); break;
-      case 'net-set': this.online?.setOption(data.key, data.type === 'num' ? Number(data.value) : data.value); break;
+      case 'net-set': this.online?.setOptions({ [data.key]: data.type === 'num' ? Number(data.value) : data.value }); break;
+      case 'net-patch': this.online?.setOptions(data); break;
       case 'net-start': this.online?.startGame(); break;
       case 'net-share': this.online?.share(); break;
       case 'net-lobby':
@@ -252,10 +331,10 @@ export class GameManager {
     else if ((this.mode === 'playing' || this.mode === 'countdown') && inp.pausePressed()) this.pause();
     else if (this.mode === 'paused' && inp.pausePressed()) this.resume();
     else if (this.mode === 'menu' && inp.pausePressed()) {
-      if (this.ui.current === 'online') this.onAction('back');
+      if (this.ui.current === 'online' || this.ui.current === 'shop') this.onAction('back');
       else if (!this.online) this.ui.back();
     }
-    else if (this.mode === 'result' && inp.pausePressed()) this.toMenu();
+    else if (this.mode === 'result' && inp.pausePressed() && !this.online) this.toMenu();
 
     // menus: setas / D-pad / analógico movem o foco; A confirma; B volta
     if (this.ui.current && (this.overlay || (this.mode !== 'playing' && this.mode !== 'countdown'))) {
@@ -266,7 +345,9 @@ export class GameManager {
         inp.consumeGamepad();
       } else if (inp.gpBackPressed()) {
         if (this.mode === 'paused' || this.overlay) this.resume();
-        else if (this.mode === 'result') this.toMenu();
+        else if (this.mode === 'result') {
+          if (!this.online) this.toMenu();
+        } else if (this.ui.current === 'shop') this.onAction('back');
         else this.ui.back();
         inp.consumeGamepad();
       }
@@ -274,7 +355,7 @@ export class GameManager {
 
     if (this.mode === 'countdown') {
       this.cdT += dt;
-      const lead = 1.0;
+      const lead = this.mg.constructor.meta.quick ? 2.4 : 1.0; // tempo para ler as regras rápidas
       if (this.cdT >= lead) {
         const step = Math.floor((this.cdT - lead) / 0.75);
         if (step !== this.cdStep) {

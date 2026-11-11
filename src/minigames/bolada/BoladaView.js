@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { BOLADA as C, SEAT_ANGLES } from './config.js';
 import { BoladaArena } from './BoladaArena.js';
 import { createCharacterModel, CharacterAnimator } from '../../characters/CharacterModel.js';
+import { lookDef } from '../../characters/characters.js';
 import { toon, withOutline, blobShadow, disposeTree } from '../../engine/toon.js';
 import { lerp, wrapAngle, clamp } from '../../engine/math.js';
 
@@ -65,7 +66,7 @@ export class BoladaView {
 
     this.pods = [null, null, null, null];
     for (const p of players) {
-      const model = createCharacterModel(p.def);
+      const model = createCharacterModel(lookDef(p));
       const anim = new CharacterAnimator(model);
       const shadow = blobShadow(2.1, 0.4);
       shadow.position.y = 0.015;

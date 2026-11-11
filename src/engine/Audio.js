@@ -105,7 +105,7 @@ export class AudioManager {
   play(name, o = {}) {
     if (!this.ready) return;
     const now = performance.now();
-    const gap = { bounce: 45, wall: 55, bumper: 70, pod: 50, post: 60 }[name];
+    const gap = { bounce: 45, wall: 55, bumper: 70, pod: 50, post: 60, boing: 40, coin: 35, tick: 30 }[name];
     if (gap && now - (this.last[name] || 0) < gap) return;
     this.last[name] = now;
     const sp = Math.min(1, (o.speed || 10) / 22);
@@ -195,6 +195,32 @@ export class AudioManager {
         this._noise({ dur: 0.6, vol: 0.06, type: 'highpass', f: 4000, delay: 0.46 });
         break;
       }
+      case 'boing':
+        this._tone({ f: 220 * (o.pitch || 1), f2: 520 * (o.pitch || 1), dur: 0.11, type: 'sine', vol: 0.12 });
+        break;
+      case 'coin':
+        this._tone({ f: o.big ? 1175 : 988, dur: 0.07, type: 'square', vol: 0.05 });
+        this._tone({ f: o.big ? 1760 : 1319, dur: 0.16, type: 'square', vol: 0.05, delay: 0.06 });
+        if (o.big) this._tone({ f: 2349, dur: 0.22, type: 'triangle', vol: 0.06, delay: 0.13 });
+        break;
+      case 'pop':
+        this._tone({ f: 700 * (o.pitch || 1), f2: 1500 * (o.pitch || 1), dur: 0.07, type: 'triangle', vol: 0.12 });
+        this._noise({ dur: 0.05, vol: 0.07, type: 'highpass', f: 3000 });
+        break;
+      case 'shot':
+        this._tone({ f: 320 * (o.pitch || 1), f2: 110 * (o.pitch || 1), dur: 0.12, type: 'square', vol: 0.09 });
+        this._noise({ dur: 0.08, vol: 0.09, type: 'bandpass', f: 1400, q: 0.8 });
+        break;
+      case 'boom':
+        this._noise({ dur: 0.5, vol: 0.4, type: 'lowpass', f: 1800, f2: 120, q: 0.7 });
+        this._tone({ f: 120, f2: 36, dur: 0.45, type: 'sine', vol: 0.5 });
+        break;
+      case 'buy':
+        [784, 988, 1319].forEach((f, i) => this._tone({ f, dur: 0.12, type: 'square', vol: 0.06, delay: i * 0.07 }));
+        break;
+      case 'deny':
+        this._tone({ f: 200, f2: 150, dur: 0.18, type: 'sawtooth', vol: 0.07 });
+        break;
       case 'ui':
         this._tone({ f: 660, f2: 880, dur: 0.06, type: 'square', vol: 0.045 });
         break;
